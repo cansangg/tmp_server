@@ -1,0 +1,201 @@
+#include <iostream>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <cstring>
+#include <fstream>
+#include <string>
+#include <thread>
+
+using namespace std;
+
+// ==================== 你的私人 Socket 封装库 ====================
+int get_tcp_fd() { return socket(AF_INET, SOCK_STREAM, 0); }
+
+void bind_port(int fd, int port) {
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+    bind(fd, (struct sockaddr*)&addr, sizeof(addr));
+}
+
+void start_listening(int fd) { listen(fd, 128); }
+
+int wait_for_new_client(int listen_fd) {
+    return accept(listen_fd, nullptr, nullptr); 
+}
+// ================================================================
+
+
+// 使用 C++11 Raw String Literal，所见即所得，再也不用写 \r\n 和 \" 了！
+const char* html_body = R"rawhtml(
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>极简公共大厅</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f4f4f9; margin-top: 50px; }
+        .container { width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #chatBox { display: none; }
+        #history { height: 300px; overflow-y: auto; text-align: left; background: #fafafa; border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 4px; white-space: pre-wrap;}
+        input { padding: 10px; width: 60%; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 20px; cursor: pointer; background: #007BFF; color: white; border: none; border-radius: 4px; font-weight: bold;}
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="color: #333;">💬 公共聊天大厅</h1>
+        
+        <div id="loginBox">
+            <input type="text" id="username" placeholder="输入你的大名进入聊天室...">
+            <button onclick="joinChat()">进入大厅</button>
+        </div>
+
+        <div id="chatBox">
+            <div id="history">读取历史消息中...</div>
+            <input type="text" id="msg" placeholder="说点什么..." onkeydown="if(event.keyCode==13) sendMsg()">
+            <button onclick="sendMsg()">发送</button>
+        </div>
+    </div>
+
+    <script>
+        let myName = "";
+        
+        // 1. 进入聊天室
+        function joinChat() {
+            let nameInput = document.getElementById("username").value.trim();
+            if (!nameInput) { alert("名字不能为空！"); return; }
+            myName = nameInput;
+            
+            // 切换 UI
+            document.getElementById("loginBox").style.display = "none";
+            document.getElementById("chatBox").style.display = "block";
+            
+            // 立即拉取一次历史记录
+            fetchHistory();
+            // 【核心机制：轮询】每隔 2 秒自动向后端索要最新聊天记录
+            setInterval(fetchHistory, 2000);
+        }
+
+        // 2. 拉取历史记录 (对应后端 GET /api/getintxt)
+        function fetchHistory() {
+            fetch('/api/getintxt')
+            .then(response => response.text())
+            .then(data => {
+                let histDiv = document.getElementById("history");
+                // 只有当有新内容时才更新和滚动，防止画面疯狂闪烁
+                if (histDiv.innerText !== data) {
+                    histDiv.innerText = data; 
+                    histDiv.scrollTop = histDiv.scrollHeight; // 自动滚动到底部
+                }
+            });
+        }
+
+        // 3. 发送新消息 (对应后端 POST /api/sendmsg)
+        function sendMsg() {
+            let msgInput = document.getElementById("msg");
+            let text = msgInput.value.trim();
+            if (!text) return;
+            
+            let fullMsg = "[" + myName + "]: " + text;
+            
+            // 发送 POST 请求，把拼接好的消息塞进请求体里
+            fetch('/api/sendmsg', {
+                method: 'POST',
+                body: fullMsg
+            }).then(() => {
+                msgInput.value = ""; // 清空输入框
+                fetchHistory();      // 发送完立刻拉取最新记录
+            });
+        }
+    </script>
+</body>
+</html>
+)rawhtml";
+
+void handle_client(int chat_fd) {
+    char buf[4096];
+    memset(buf, 0, sizeof(buf));
+    
+    int bytes_read = read(chat_fd, buf, sizeof(buf) - 1); 
+    if (bytes_read <= 0) {
+        close(chat_fd);
+        return;
+    }
+
+    // 路由 1：获取历史聊天记录 (GET 请求)
+    if (strncmp(buf, "GET /api/getintxt", 17) == 0) {
+        ifstream infile("in.txt");
+        string file_content;
+        if (infile.is_open()) {
+            string line;
+            while (getline(infile, line)) {
+                file_content += line + "\n";
+            }
+            infile.close();
+        }
+        
+        string http_response = 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain; charset=utf-8\r\n"
+            "Content-Length: " + to_string(file_content.length()) + "\r\n\r\n" + 
+            file_content;
+
+        write(chat_fd, http_response.c_str(), http_response.length()); 
+    } 
+    // 路由 2：接收并保存新消息 (POST 请求)
+    else if (strncmp(buf, "POST /api/sendmsg", 17) == 0) {
+        // 在 HTTP 协议中，请求头和请求体（真正的数据）之间必然隔着一个空行 (\r\n\r\n)
+        // 我们通过找这个空行，定位到用户发来的消息内容
+        char* body_start = strstr(buf, "\r\n\r\n");
+        if (body_start != nullptr) {
+            body_start += 4; // 跳过这 4 个字符，剩下的就是真正的数据
+            
+            // 以追加模式 (app) 打开文件，写入新消息
+            ofstream outfile("in.txt", ios::app);
+            if (outfile.is_open()) {
+                outfile << body_start << "\n";
+                outfile.close();
+                printf("收到新消息并写入文件: %s\n", body_start);
+            }
+        }
+
+        // 告诉浏览器：我收到了，处理成功
+        string http_response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
+        write(chat_fd, http_response.c_str(), http_response.length());
+    }
+    // 路由 3：请求网页界面 (默认首页)
+    else {
+        char http_response[8192];
+        sprintf(http_response,
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html; charset=utf-8\r\n"
+            "Content-Length: %zu\r\n\r\n%s",
+            strlen(html_body), 
+            html_body
+        );
+        write(chat_fd, http_response, strlen(http_response)); 
+    }
+
+    close(chat_fd); 
+}
+
+int main() {
+    int listen_fd = get_tcp_fd();
+    bind_port(listen_fd, 8080);
+    start_listening(listen_fd);
+    printf("🚀 聊天室服务器启动成功！正在监听 8080 端口...\n");
+
+    while (true) {
+        int chat_fd = wait_for_new_client(listen_fd); 
+
+        std:thread t(handle_client, chat_fd);
+        t.detach();
+    }
+    
+    return 0;
+}

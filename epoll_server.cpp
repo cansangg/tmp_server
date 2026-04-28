@@ -9,118 +9,116 @@
 #include <arpa/inet.h>
 #include <sys/epoll.h>
 
-const int PORT = 8080;
-const int MAX_EVENTS = 100; // epoll_wait 每次最多拿几个事件
-const int BUF_SIZE = 1024;
+// ==================== 基础 Socket 封装 ====================
+int get_tcp_fd() { return socket(AF_INET, SOCK_STREAM, 0); }
+void bind_port(int fd, int port) {
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+    bind(fd, (struct sockaddr*)&addr, sizeof(addr));
+}
+void start_listening(int fd) { listen(fd, 128); }
+int wait_for_new_client(int listen_fd) { return accept(listen_fd, nullptr, nullptr); }
+// ==========================================================
+
+// ==================== 你的私人 epoll 封装库 ====================
+
+// 1. 创建前台的“呼叫器屏幕” (epoll 实例)
+int create_epoll() {
+    // epoll_create1(0) 是较新的 API，推荐使用
+    return epoll_create1(0); 
+}
+
+// 2. 把指定的 fd 挂到呼叫器上监视
+void add_to_epoll(int epoll_fd, int target_fd) {
+    struct epoll_event event;
+    event.data.fd = target_fd;    // 记录这桌的号码 (fd)
+    event.events = EPOLLIN;       // 监视的事件：EPOLLIN 表示“有数据进来可读”
+    // 注意：如果是生产级，这里通常会加一个 EPOLLET (边缘触发) 标志，并配合非阻塞 IO
+    
+    // 把事件注册到底层的红黑树上
+    epoll_ctl(epoll_fd, EPOLL_CTL_ADD, target_fd, &event);
+}
+
+// 3. 把指定的 fd 从呼叫器上摘除 (客人走了)
+void remove_from_epoll(int epoll_fd, int target_fd) {
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, target_fd, nullptr);
+}
+
+// ==========================================================
+
+#define MAX_EVENTS 1024 // 每次最多从屏幕上同时看多少个响铃的桌子
 
 int main() {
-    // 1. 创建服务器大门：监听 Socket
-    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_fd < 0) {
-        perror("Socket creation failed");
-        return -1;
-    }
+    int listen_fd = get_tcp_fd();
+    bind_port(listen_fd, 8080);
+    start_listening(listen_fd);
+    
+    // 1. 买一个前台呼叫器屏幕
+    int epoll_fd = create_epoll();
+    
+    // 2. 最关键的一步：把保安 (listen_fd) 也挂到呼叫器上监视！
+    // 只要有新客人来，保安就会按铃。
+    add_to_epoll(epoll_fd, listen_fd);
+    
+    // 准备一个小本子，用来记录每次哪些桌子按铃了
+    struct epoll_event events[MAX_EVENTS];
 
-    // 设置端口复用（防止重启服务器时报错“端口被占用”）
-    int opt = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    printf("🚀 Epoll 高并发聊天室启动！\n");
 
-    struct sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(PORT);
-
-    // 绑定端口并开始监听
-    if (bind(listen_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Bind failed");
-        return -1;
-    }
-    listen(listen_fd, SOMAXCONN);
-    std::cout << "🚀 聊天室服务器已启动，监听端口: " << PORT << std::endl;
-
-    // ==========================================
-    // 核心开始：epoll 登场
-    // ==========================================
-
-    // 2. 创建 epoll 实例（建立外包公司）
-    int epfd = epoll_create1(0);
-    if (epfd < 0) {
-        perror("epoll_create1 failed");
-        return -1;
-    }
-
-    // 3. 把大门（listen_fd）挂到 epoll 的红黑树上
-    struct epoll_event ev;
-    ev.events = EPOLLIN; // 我们只关心“可读”事件（有新连接来了）
-    ev.data.fd = listen_fd;
-    epoll_ctl(epfd, EPOLL_CTL_ADD, listen_fd, &ev);
-
-    // 用一个集合保存所有已连接的客户 fd，方便群发
-    std::unordered_set<int> client_fds;
-    struct epoll_event events[MAX_EVENTS]; // 用来接收就绪事件的篮子
-
-    // 4. 死循环：坐等事件送上门
     while (true) {
-        // 挂起线程，直到就绪链表里有货
-        int nfds = epoll_wait(epfd, events, MAX_EVENTS, -1);
+        // 3. 服务员死盯着屏幕，等铃响。
+        // epoll_wait 会阻塞在这里休眠，直到有任何一个或多个事件发生才醒来。
+        // 返回值 active_count 就是当前有几桌按了铃。
+        int active_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         
-        for (int i = 0; i < nfds; ++i) {
-            int active_fd = events[i].data.fd;
-
-            // 情况 A：大门响了（有新客户连接）
-            if (active_fd == listen_fd) {
-                struct sockaddr_in client_addr;
-                socklen_t client_len = sizeof(client_addr);
-                int new_client_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
+        // 醒来干活！挨个处理响铃的桌子
+        for (int i = 0; i < active_count; i++) {
+            int current_fd = events[i].data.fd; // 看看是哪个号码响的铃
+            
+            // 场景 A：响铃的是保安 (listen_fd)
+            // 说明有新客人要连进大厅了
+            if (current_fd == listen_fd) {
+                int new_chat_fd = wait_for_new_client(listen_fd);
+                printf(">> 有新用户接入聊天室，分配 fd: %d\n", new_chat_fd);
                 
-                if (new_client_fd >= 0) {
-                    std::cout << "[新连接] 客户端 FD: " << new_client_fd 
-                              << " IP: " << inet_ntoa(client_addr.sin_addr) << std::endl;
-                    
-                    // 把新客户也挂到 epoll 上，盯着他说话
-                    ev.events = EPOLLIN;
-                    ev.data.fd = new_client_fd;
-                    epoll_ctl(epfd, EPOLL_CTL_ADD, new_client_fd, &ev);
-                    
-                    client_fds.insert(new_client_fd); // 加入群聊名单
-
-                    // 发送欢迎语
-                    std::string welcome = "欢迎加入黑客聊天室！你的代号是 FD " + std::to_string(new_client_fd) + "\n";
-                    send(new_client_fd, welcome.c_str(), welcome.length(), 0);
-                }
+                // 给新客人发个手机，并把他的手机号挂到呼叫器上监视
+                add_to_epoll(epoll_fd, new_chat_fd);
             } 
-            // 情况 B：桌子响了（某个老客户发消息了，或者退出了）
+            // 场景 B：响铃的是某个老客人 (chat_fd)
+            // 说明他在网页上发消息了，或者他在拉取历史记录
             else {
-                char buffer[BUF_SIZE];
-                memset(buffer, 0, BUF_SIZE);
-                int bytes_read = read(active_fd, buffer, BUF_SIZE - 1);
-
+                char buf[4096];
+                memset(buf, 0, sizeof(buf));
+                
+                int bytes_read = read(current_fd, buf, sizeof(buf) - 1);
+                
+                // 如果读到了 0 字节，说明客人把浏览器关了（TCP 断开连接机制）
                 if (bytes_read <= 0) {
-                    // 读到 0 字节，说明客户端断开了连接
-                    std::cout << "[掉线] 客户端 FD: " << active_fd << " 已退出群聊。\n";
+                    printf(">> 用户 (fd: %d) 离开了聊天室。\n", current_fd);
+                    remove_from_epoll(epoll_fd, current_fd); // 从屏幕上摘除
+                    close(current_fd); // 没收手机
+                } 
+                else {
+                    // 他发数据过来了！这里放你之前的“大长串 HTTP 报文读取器”
+                    // 并且处理完之后，不用写close(current_fd); 
+                    // 这样他下次点发送时，依然会触发 epoll_wait 醒来
                     
-                    // 收尾工作：从 epoll 树上摘除，关闭 fd，踢出群聊名单
-                    epoll_ctl(epfd, EPOLL_CTL_DEL, active_fd, NULL);
-                    close(active_fd);
-                    client_fds.erase(active_fd);
-                } else {
-                    // 收到正常消息，准备群发（广播）
-                    std::cout << "[收到消息] 来自 FD " << active_fd << ": " << buffer;
-
-                    std::string broadcast_msg = "[FD " + std::to_string(active_fd) + " 说]: " + buffer;
-                    
-                    // 遍历所有客户，除了发消息的本人，其他人都发一份
-                    for (int other_fd : client_fds) {
-                        if (other_fd != active_fd) {
-                            send(other_fd, broadcast_msg.c_str(), broadcast_msg.length(), 0);
-                        }
+                    // ... 你的业务逻辑：处理 request_data，write 回应 ...
+                    std::string s;
+                    char buf[1024];
+                    int bytes_read;
+                    while (bytes_read = read(current_fd, buf, 1023)) {
+                        buf[bytes_read] = '\0';
+                        s += buf;
                     }
+                    s += '0' + current_fd;
+                    write(current_fd, s.c_str(), s.size());
                 }
             }
         }
     }
-
-    close(listen_fd);
-    close(epfd);
+    
     return 0;
 }

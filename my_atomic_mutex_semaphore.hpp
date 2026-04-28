@@ -10,6 +10,8 @@ namespace my {
         volatile T v; 
 
     public:
+        static_assert(sizeof(T) == 4, "Futex syscall MUST strictly operate on 32-bit integers (4 bytes)!");
+
         atomic(T v = T{}) : v(v) {}
 
         bool compare_exchange(T expected, T new_value) {
@@ -53,7 +55,7 @@ namespace my {
         atomic<int> ato;
 
     public:
-        mutex(int state = 0) : ato(state != 0) {}
+        mutex(int state = 1) : ato(state != 0) {}
 
         void lock() {
             int cnt = 0;
@@ -77,7 +79,7 @@ namespace my {
     public:
         semaphore(int capacity) : ato(capacity) {}
 
-        void wait() {
+        void acquire() {
             while (true) {
                 int pre = ato.load();
                 if (pre > 0) {
@@ -88,7 +90,7 @@ namespace my {
             }
         }
 
-        void signal() {
+        void release() {
             ato.fetch_add(1);
             ato.wake(1);
         }

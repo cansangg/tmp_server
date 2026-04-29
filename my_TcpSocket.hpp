@@ -133,5 +133,24 @@ namespace my {
         }
         
         int getFd() const { return fd; }
+
+        static size_t getBodyLength(const std::string& header) {
+            size_t pos = header.find("Content-Length:");
+
+            if (pos != std::string::npos) {
+                pos += 15; 
+                size_t end_pos = header.find("\r\n", pos);
+                
+                if (end_pos != std::string::npos) {
+                    try {
+                        std::string num_str = header.substr(pos, end_pos - pos);
+                        return std::stoull(num_str);
+                    } catch (const std::exception&) {
+                        return 0;
+                    }
+                }
+            }
+            return 0; 
+        }
     };
 }

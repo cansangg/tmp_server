@@ -12,7 +12,7 @@ int main() {
     my::TcpSocket client;
     client.connectTo("lengtiming.dpdns.org", 8080);
     
-    std::string body = "666\n"; 
+    std::string body = "666"; 
         
     // 严格按照 HTTP/1.1 协议组装报文
     std::string http_request = 

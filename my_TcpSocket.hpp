@@ -136,6 +136,7 @@ namespace my {
 
         static size_t getBodyLength(const std::string& header) {
             size_t pos = header.find("Content-Length:");
+            if (pos == std::string::npos) pos = header.find("content-length:");
 
             if (pos != std::string::npos) {
                 pos += 15; 

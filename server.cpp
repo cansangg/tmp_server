@@ -121,12 +121,7 @@ void handle_client(my::TcpSocket client) {
     // 路由 2：接收并保存新消息 (POST 请求)
     else if (header.find("POST /api/sendmsg") == 0) {
         // [核心改进] 从 header 中解析 Content-Length，防断包截断！
-        size_t content_length = 0;
-        size_t pos = header.find("Content-Length: ");
-        if (pos != std::string::npos) {
-            size_t end_pos = header.find("\r\n", pos);
-            content_length = std::stoi(header.substr(pos + 16, end_pos - pos - 16));
-        }
+        size_t content_length = my::TcpSocket::getBodyLength(header);
 
         // 精确读取对应长度的 Body
         std::string body = client.readExactly(content_length);

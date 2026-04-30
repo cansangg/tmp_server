@@ -27,5 +27,11 @@ int main() {
     // 发送规范的 HTTP 请求
     client.write(http_request);
 
-    std::cout << client.readExactly(my::TcpSocket::getBodyLength(client.readUntil("\r\n\r\n"))) << '\n';
+    std::string r_header = client.readUntil("\r\n\r\n");
+    size_t len = my::TcpSocket::getBodyLength(r_header);
+    std::string r_body = client.readExactly(len);
+
+    std::cout << r_header << "\n#\n";
+    
+    std::cout << r_body << "\n#\n";
 }

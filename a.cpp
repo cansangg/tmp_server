@@ -6,8 +6,8 @@
 
 
 int main() {
-    constexpr int win_h = 1200, win_w = 900;
-    InitWindow(win_h, win_w, "C++ Raylib game");
+    constexpr int win_w = 1200, win_h = 900;
+    InitWindow(win_w, win_h, "C++ Raylib game");
     SetTargetFPS(60);
     
     constexpr int time_interval = 20, H = 16, W = 10;
@@ -101,9 +101,9 @@ int main() {
 
         // 动态计算渲染尺寸，让画面在 1200x900 的大窗口里完美居中
         const int CELL_SIZE = 50; // 格子放大到 50 像素，视觉效果极佳
-        // 注意：你传给 InitWindow 的第一个参数是 win_h(1200)，所以它是宽
-        const int OFFSET_X = (win_h - W * CELL_SIZE) / 2; 
-        const int OFFSET_Y = (win_w - H * CELL_SIZE) / 2; 
+        // 注意：你传给 InitWindow 的第一个参数是 win_w(1200)，所以它是宽
+        const int OFFSET_X = (win_w - W * CELL_SIZE) / 2; 
+        const int OFFSET_Y = (win_h - H * CELL_SIZE) / 2; 
 
         // 1. 画游戏区域底板和边框
         DrawRectangle(OFFSET_X, OFFSET_Y, W * CELL_SIZE, H * CELL_SIZE, LIGHTGRAY);
@@ -156,13 +156,13 @@ int main() {
 
         if (gameover) {
             // 盖一层全屏的半透明黑色遮罩，高级感直接拉满
-            DrawRectangle(0, 0, win_h, win_w, Fade(BLACK, 0.6f));
+            DrawRectangle(0, 0, win_w, win_h, Fade(BLACK, 0.6f));
             
             // MeasureText 会自动计算字符串在特定字号下的宽度，保证居中极其完美
             const char* go_text = "GAME OVER!";
             const char* re_text = "Press [ENTER] to Restart";
-            DrawText(go_text, win_h / 2 - MeasureText(go_text, 80) / 2, win_w / 2 - 60, 80, RED);
-            DrawText(re_text, win_h / 2 - MeasureText(re_text, 30) / 2, win_w / 2 + 40, 30, LIGHTGRAY);
+            DrawText(go_text, win_w / 2 - MeasureText(go_text, 80) / 2, win_h / 2 - 60, 80, RED);
+            DrawText(re_text, win_w / 2 - MeasureText(re_text, 30) / 2, win_h / 2 + 40, 30, LIGHTGRAY);
         }
 
         EndDrawing();

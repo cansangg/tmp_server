@@ -135,7 +135,7 @@ int main() {
 
     int cnt = 0;
     while (true) {
-        poller.poll(1000 / 16, onNewConnection, onClientData);
+        poller.poll(1000 / 60, onNewConnection, onClientData);
         
         p_class p;
         for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) p.g[i][j] = g[i][j];

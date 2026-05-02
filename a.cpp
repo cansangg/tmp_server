@@ -111,7 +111,7 @@ int main() {
     };
 
     my::TcpSocket client;
-    client.connectTo("lengtiming.dpdns.org", 8080);
+    client.connectTo("47.238.99.207", 8080);
     std::cout << "connected" << std::endl;
     //client.setBlocking(false);
 

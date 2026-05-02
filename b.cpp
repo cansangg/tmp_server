@@ -132,6 +132,8 @@ int main() {
         int gameover;
     };
 
+
+    int cnt = 0;
     while (true) {
         poller.poll(1000 / 16, onNewConnection, onClientData);
         
@@ -149,6 +151,8 @@ int main() {
         for (auto& client : poller.m_clients) {
             client.write(pkt_str);
         }
+
+        if ((++cnt) % 60 == 0) std::cout << '.' << std::endl;
     }
 
     return 0;

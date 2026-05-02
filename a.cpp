@@ -111,11 +111,19 @@ int main() {
     };
 
     my::TcpSocket client;
-    client.connectTo("lengtiming.dpdns.org", 8000);
+    client.connectTo("lengtiming.dpdns.org", 8080);
     std::cout << "connected" << std::endl;
-    // client.setBlocking(false);
+    //client.setBlocking(false);
 
-    /*while (!WindowShouldClose()) {
+    struct p_class {
+        int g[16][10];
+        int cord_x, cord_y, state;
+        int current_block, next_block;
+        int score;
+        int gameover;
+    };
+
+    while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_UP))    client.write("U");
         if (IsKeyPressed(KEY_LEFT))  client.write("L");
         if (IsKeyPressed(KEY_RIGHT)) client.write("R");
@@ -123,6 +131,7 @@ int main() {
         if (IsKeyPressed(KEY_ENTER)) client.write("E");
 
         std::string data = client.readExactly(sizeof(p_class));
+        std::cout << data.length() << std::endl;
         
         // 防半包：只有收到了完整大小的包裹，我们才拆箱！
         if (data.length() == sizeof(p_class)) {
@@ -146,8 +155,8 @@ int main() {
         }
         
         render();
-        std::cout << "???\n";
-    }*/
+        std::cout << "???" << std::endl;
+    }
 
     CloseWindow();
     return 0;

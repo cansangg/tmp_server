@@ -101,6 +101,7 @@ int main() {
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
         std::string c = client.readExactly(1);
+        std::cout << 
         if (!gameover) {
             if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << std::endl;
             if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;
@@ -155,7 +156,7 @@ int main() {
             client.write(pkt_str);
         }
 
-        if ((++cnt) % 60 == 0) {
+        if ((++cnt) % 120 == 0) {
             std::cout << '.' << std::endl;
             std::cout << poller.m_clients.size() << std::endl;
         }

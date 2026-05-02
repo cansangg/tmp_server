@@ -124,6 +124,7 @@ int main() {
         int time_cnt;
     };
 
+    int cnt = 0;
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_UP))    client.write("U");
         if (IsKeyPressed(KEY_LEFT))  client.write("L");
@@ -132,7 +133,6 @@ int main() {
         if (IsKeyPressed(KEY_ENTER)) client.write("E");
 
         std::string data = client.readExactly(sizeof(p_class));
-        std::cout << data.length() << std::endl;
         
         // 防半包：只有收到了完整大小的包裹，我们才拆箱！
         if (data.length() == sizeof(p_class)) {
@@ -157,7 +157,11 @@ int main() {
         }
         
         render();
-        std::cout << "???" << std::endl;
+
+        if ((++cnt) % 60 == 0) {
+            std::cout << '.' << std::endl;
+            std::cout << poller.m_clients.size() << std::endl;
+        }
     }
 
     CloseWindow();

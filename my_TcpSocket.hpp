@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 namespace my {
     class TcpSocket { 
@@ -20,7 +21,7 @@ namespace my {
             if (fd < 0) return false;
             char tmp_buf[4096];
             int bytes_read = ::read(fd, tmp_buf, sizeof(tmp_buf));
-            if (bytes_read == 0) return false;
+            if (bytes_read <= 0) return false;
             in_buffer.append(tmp_buf, bytes_read);
             return true;
         }
@@ -156,5 +157,6 @@ namespace my {
     };
 }
 
-// 值传递 = 必须在函数内部构造一个新对象。至于怎么构造？既可以是拷贝构造，也可以是移动构造！
+// 值传递 = 必须在函数内部构造一个新对象。至于怎么构造？既可以是拷贝构造，也可以是移动构造
 // 传右值时，值传递会引发移动（只要你写了移动构造）。
+// const T& 传右值也只会拷贝构造

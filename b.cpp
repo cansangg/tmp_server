@@ -115,6 +115,7 @@ int main() {
                 if (client.getFd() == it->getFd()) {
                     std::cout << client.getFd() << " exit" << std::endl;
                     poller.m_clients.erase(it);
+                    std::cout << "current players: " << poller.m_clients.size() << std::endl;
                     break;
                 }
             }

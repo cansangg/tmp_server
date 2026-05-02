@@ -106,10 +106,6 @@ int main() {
             if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;
             if (c == "R") try_move(0, 1), std::cout << client.getFd() << " pressed R" << std::endl;
             if (c == "D") try_move(-1, 0), std::cout << client.getFd() << " pressed D" << std::endl;
-            if (++time_cnt > time_interval) {
-                time_cnt = 0;
-                if (!try_move(-1, 0)) place_and_loadnext_and_checkgameover();
-            }
         } else {
             if (c == "E") initgame(), std::cout << client.getFd() << " pressed E" << std::endl;
         }
@@ -130,12 +126,18 @@ int main() {
         int current_block, next_block;
         int score;
         int gameover;
+        int time_cnt; 
     };
 
 
     int cnt = 0;
     while (true) {
         poller.poll(1000 / 60, onNewConnection, onClientData);
+
+        if (++time_cnt > time_interval) {
+            time_cnt = 0;
+            if (!try_move(-1, 0)) place_and_loadnext_and_checkgameover();
+        }
         
         p_class p;
         for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) p.g[i][j] = g[i][j];
@@ -146,6 +148,7 @@ int main() {
         p.next_block = next_block;
         p.score = score; 
         p.gameover = gameover;
+        p.time_cnt = time_cnt;
 
         std::string pkt_str((char*)&p, sizeof(p_class));
         for (auto& client : poller.m_clients) {

@@ -121,6 +121,7 @@ int main() {
         int current_block, next_block;
         int score;
         int gameover;
+        int time_cnt;
     };
 
     while (!WindowShouldClose()) {
@@ -152,6 +153,7 @@ int main() {
             next_block = p.next_block;
             score = p.score; 
             gameover = p.gameover;
+            time_cnt = p.time_cnt;
         }
         
         render();

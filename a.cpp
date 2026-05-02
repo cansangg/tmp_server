@@ -160,7 +160,7 @@ int main() {
 
         if ((++cnt) % 60 == 0) {
             std::cout << '.' << std::endl;
-            std::cout << poller.m_clients.size() << std::endl;
+            std::cout << current_block << std::endl;
         }
     }
 

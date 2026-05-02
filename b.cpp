@@ -101,7 +101,7 @@ int main() {
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
         std::string c = client.readExactly(1);
-        std::cout << "#" << c << std::endl;
+        //std::cout << "#" << c << std::endl;
         if (!gameover) {
             if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << std::endl;
             if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;
@@ -131,11 +131,10 @@ int main() {
     };
 
 
-    int cnt = 0;
     while (true) {
         poller.poll(1000 / 60, onNewConnection, onClientData);
 
-        if (++time_cnt > time_interval) {
+        if (!gameover && ++time_cnt > time_interval) {
             time_cnt = 0;
             if (!try_move(-1, 0)) place_and_loadnext_and_checkgameover();
         }
@@ -154,11 +153,6 @@ int main() {
         std::string pkt_str((char*)&p, sizeof(p_class));
         for (auto& client : poller.m_clients) {
             client.write(pkt_str);
-        }
-
-        if ((++cnt) % 120 == 0) {
-            std::cout << '.' << std::endl;
-            std::cout << poller.m_clients.size() << std::endl;
         }
     }
 

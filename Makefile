@@ -1,3 +1,17 @@
-# 注意：第二行开头必须是一个真实的 Tab 键，不能是空格！
-a.out: a.cpp
-	g++ a.cpp -o a.out -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+# 编译器和库
+CXX = g++
+LIBS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+TARGET = a.out
+
+# 默认只编译
+$(TARGET): a.cpp
+	$(CXX) a.cpp -o $(TARGET) $(LIBS)
+
+# 【核心：一键编译 + 软件渲染运行】
+# 这里不需要 &&，因为 make 会按顺序检查依赖
+run: $(TARGET)
+	LIBGL_ALWAYS_SOFTWARE=1 ./$(TARGET)
+
+# 清理
+clean:
+	rm -f $(TARGET)

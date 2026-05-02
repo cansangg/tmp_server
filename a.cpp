@@ -3,6 +3,7 @@
 #include <array>
 #include <random>
 #include <algorithm>
+#include <iostream>
 
 #include "my_SelectPoller.hpp"
 
@@ -156,17 +157,6 @@ int main() {
         }
         
         render();
-
-        if ((++cnt) % 60 == 0) {
-            std::cout << "#\n";
-            for (int i = 0; i < 16; i++) {
-                for (int j = 0; j < 10; j++) {
-                    std::cout << g[i][j];
-                }
-                std::cout << '\n';
-            }
-            std::cout << "#\n";
-        }
     }
 
     CloseWindow();

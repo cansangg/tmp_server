@@ -20,7 +20,7 @@ int main() {
     };
     std::mt19937 rnd(time(0));
 
-    int current_block, next_block;;
+    int current_block, next_block;
     int cord_x, cord_y, state; // % 4
     int time_cnt, score;
     int gameover;

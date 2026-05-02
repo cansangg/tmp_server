@@ -92,7 +92,7 @@ namespace my {
 
         bool write(const std::string& msg) {
             if (fd < 0) return false;
-            ssize_t sent = ::write(fd, msg.c_str(), msg.length());
+            ssize_t sent = ::send(fd, msg.c_str(), msg.length(), MSG_NOSIGNAL);
             return sent == (ssize_t)msg.length();
         }
 

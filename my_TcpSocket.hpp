@@ -154,6 +154,22 @@ namespace my {
             }
             return 0; 
         }
+
+        void setBlocking(bool blocking) { //设置::read(this->fd)时非堵塞
+            if (fd < 0) return;
+            int flags = fcntl(fd, F_GETFL, 0);
+            if (flags == -1) throw std::runtime_error("fcntl F_GETFL 失败");
+
+            if (!blocking) {
+                flags |= O_NONBLOCK;  
+            } else {
+                flags &= ~O_NONBLOCK; 
+            }
+
+            if (fcntl(fd, F_SETFL, flags) == -1) {
+                throw std::runtime_error("fcntl F_SETFL 失败");
+            }
+        }
     };
 }
 

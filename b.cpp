@@ -124,17 +124,30 @@ int main() {
         }
     };
 
+    struct p_class {
+        int g[16][10];
+        int cord_x, cord_y, state;
+        int current_block, next_block;
+        int score;
+        int gameover;
+    };
+
     while (true) {
         poller.poll(1000 / 16, onNewConnection, onClientData);
+        
+        p_class p;
+        for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) p.g[i][j] = g[i][j];
+        p.cord_x = cord_x; 
+        p.cord_y = cord_y; 
+        p.state = state;
+        p.current_block = current_block; 
+        p.next_block = next_block;
+        p.score = score; 
+        p.gameover = gameover;
+
+        std::string pkt_str((char*)&p, sizeof(p_class));
         for (auto& client : poller.m_clients) {
-            for (auto v : g) for (auto x : v) client.write(std::to_string(x) + "\n");
-            client.write(std::to_string(cord_x) + "\n");
-            client.write(std::to_string(cord_y) + "\n");
-            client.write(std::to_string(state) + "\n");
-            client.write(std::to_string(current_block) + "\n");
-            client.write(std::to_string(next_block) + "\n");
-            client.write(std::to_string(score) + "\n");
-            client.write(std::to_string(gameover) + "\n");
+            client.write(pkt_str);
         }
     }
 

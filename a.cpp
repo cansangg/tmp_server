@@ -10,7 +10,7 @@
 int main() {
     constexpr int win_w = 1200, win_h = 900;
     InitWindow(win_w, win_h, "C++ Raylib game");
-    //SetTargetFPS(60);
+    SetTargetFPS(60);
     
     constexpr int time_interval = 20, H = 16, W = 10;
     std::vector<std::vector<int>> g(H, std::vector<int>(W, 0));
@@ -112,6 +112,7 @@ int main() {
 
     my::TcpSocket client;
     client.connectTo("lengtiming.dpdns.org", 8080);
+    /*client.setBlocking(false);
 
     while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_UP))    client.write("U");
@@ -120,22 +121,34 @@ int main() {
         if (IsKeyPressed(KEY_DOWN))  client.write("D");
         if (IsKeyPressed(KEY_ENTER)) client.write("E");
 
-        try {
-            for (auto& v : g) for (auto& x : v) x = std::stoi(client.readUntil("\n"));
-            cord_x        = std::stoi(client.readUntil("\n"));
-            cord_y        = std::stoi(client.readUntil("\n"));
-            state         = std::stoi(client.readUntil("\n"));
-            current_block = std::stoi(client.readUntil("\n"));
-            next_block    = std::stoi(client.readUntil("\n"));
-            score         = std::stoi(client.readUntil("\n"));
-            gameover      = std::stoi(client.readUntil("\n"));
-        } catch (const std::exception& e) {
-            // 防半包
+        std::string data = client.readExactly(sizeof(p_class));
+        
+        // 防半包：只有收到了完整大小的包裹，我们才拆箱！
+        if (data.length() == sizeof(p_class)) {
+            p_class p;
+            // 瞬间内存覆盖拆箱！
+            std::memcpy(&p, data.data(), sizeof(p_class));
+            
+            // 把箱子里的东西，倒腾回你那些散装的局部变量里，供 render() 使用！
+            for (int i = 0; i < H; ++i) {
+                for (int j = 0; j < W; ++j) {
+                    g[i][j] = p.g[i][j];
+                }
+            }
+            cord_x = p.cord_x; 
+            cord_y = p.cord_y; 
+            state = p.state;
+            current_block = p.current_block; 
+            next_block = p.next_block;
+            score = p.score; 
+            gameover = p.gameover;
         }
         
         render();
+        std::cout << "???\n";
     }
 
-    CloseWindow();
+    CloseWindow();*/
+    while(1);
     return 0;
 }

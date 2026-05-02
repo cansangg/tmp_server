@@ -1,4 +1,3 @@
-#include <raylib.h>
 #include <vector>
 #include <array>
 #include <random>
@@ -96,25 +95,27 @@ int main() {
 
     auto onNewConnection = [&]() -> void {
         poller.m_clients.push_back(std::move(poller.m_server.acceptClient()));
+        std::cout << poller.m_clients.back().getFd() << " enter" << '\n';
     };
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
         std::string c = client.readExactly(1);
         if (!gameover) {
-            if (c == "U") try_rotate();
-            if (c == "L") try_move(0, -1);
-            if (c == "R") try_move(0, 1);
-            if (c == "D") try_move(-1, 0);
+            if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << '\n';
+            if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << '\n';
+            if (c == "R") try_move(0, 1), std::cout << client.getFd() << " pressed R" << '\n';
+            if (c == "D") try_move(-1, 0), std::cout << client.getFd() << " pressed D" << '\n';
             if (++time_cnt > time_interval) {
                 time_cnt = 0;
                 if (!try_move(-1, 0)) place_and_loadnext_and_checkgameover();
             }
         } else {
-            if (c == "E") initgame();
+            if (c == "E") initgame(), std::cout << client.getFd() << " pressed E" << '\n';
         }
         if (c == "") {
             for (auto it = poller.m_clients.begin(); it != poller.m_clients.end(); ++it) {
                 if (client.getFd() == it->getFd()) {
+                    std::cout << client.getFd() << " exit" << '\n';
                     poller.m_clients.erase(it);
                     break;
                 }

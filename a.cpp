@@ -120,14 +120,18 @@ int main() {
         if (IsKeyPressed(KEY_DOWN))  client.write("D");
         if (IsKeyPressed(KEY_ENTER)) client.write("E");
 
-        for (auto& v : g) for (auto& x : v) x = std::stoi(client.readUntil("\n"));
-        cord_x        = std::stoi(client.readUntil("\n"));
-        cord_y        = std::stoi(client.readUntil("\n"));
-        state         = std::stoi(client.readUntil("\n"));
-        current_block = std::stoi(client.readUntil("\n"));
-        next_block    = std::stoi(client.readUntil("\n"));
-        score         = std::stoi(client.readUntil("\n"));
-        gameover      = std::stoi(client.readUntil("\n"));
+        try {
+            for (auto& v : g) for (auto& x : v) x = std::stoi(client.readUntil("\n"));
+            cord_x        = std::stoi(client.readUntil("\n"));
+            cord_y        = std::stoi(client.readUntil("\n"));
+            state         = std::stoi(client.readUntil("\n"));
+            current_block = std::stoi(client.readUntil("\n"));
+            next_block    = std::stoi(client.readUntil("\n"));
+            score         = std::stoi(client.readUntil("\n"));
+            gameover      = std::stoi(client.readUntil("\n"));
+        } catch (const std::exception& e) {
+            // 防半包
+        }
         
         render();
     }

@@ -97,7 +97,7 @@ int main() {
     auto onNewConnection = [&]() -> void {
         poller.m_clients.push_back(std::move(poller.m_server.acceptClient()));
         std::cout << poller.m_clients.back().getFd() << " enter" << std::endl;
-        std::cout << "curreent player: " << poller.m_clients.size() << std::endl;
+        std::cout << "current player: " << poller.m_clients.size() << std::endl;
     };
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
@@ -115,7 +115,7 @@ int main() {
                 if (client.getFd() == it->getFd()) {
                     std::cout << client.getFd() << " exit" << std::endl;
                     poller.m_clients.erase(it);
-        s           std::cout << "curreent player: " << poller.m_clients.size() << std::endl;
+                    std::cout << "current player: " << poller.m_clients.size() << std::endl;
                     break;
                 }
             }

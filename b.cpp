@@ -92,6 +92,7 @@ int main() {
     initgame();
 
     my::SelectPoller poller(8080);
+    std::cout << "started listening" << '\n';
 
     auto onNewConnection = [&]() -> void {
         poller.m_clients.push_back(std::move(poller.m_server.acceptClient()));

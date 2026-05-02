@@ -134,33 +134,31 @@ int main() {
 
         std::string data = client.readExactly(sizeof(p_class));
         
-        // 防半包：只有收到了完整大小的包裹，我们才拆箱！
-        if (data.length() == sizeof(p_class)) {
-            p_class p;
-            // 瞬间内存覆盖拆箱！
-            std::memcpy(&p, data.data(), sizeof(p_class));
-            
-            // 把箱子里的东西，倒腾回你那些散装的局部变量里，供 render() 使用！
-            for (int i = 0; i < H; ++i) {
-                for (int j = 0; j < W; ++j) {
-                    g[i][j] = p.g[i][j];
-                }
-            }
-            cord_x = p.cord_x; 
-            cord_y = p.cord_y; 
-            state = p.state;
-            current_block = p.current_block; 
-            next_block = p.next_block;
-            score = p.score; 
-            gameover = p.gameover;
-            time_cnt = p.time_cnt;
-        }
+        p_class p;
+        std::memcpy(&p, data.data(), sizeof(p_class));
+        
+        // 把箱子里的东西，倒腾回你那些散装的局部变量里，供 render() 使用！
+        for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) g[i][j] = p.g[i][j];
+        cord_x = p.cord_x; 
+        cord_y = p.cord_y; 
+        state = p.state;
+        current_block = p.current_block; 
+        next_block = p.next_block;
+        score = p.score; 
+        gameover = p.gameover;
+        time_cnt = p.time_cnt;
         
         render();
 
         if ((++cnt) % 60 == 0) {
-            std::cout << '.' << std::endl;
-            std::cout << current_block << std::endl;
+            std::cout << "#\n";
+            for (int i = 0; i < 16; i++) {
+                for (int j = 0; j < 10; j++) {
+                    std::cout << g[i][j];
+                }
+                std::cout << '\n';
+            }
+            std::cout << "#\n";
         }
     }
 

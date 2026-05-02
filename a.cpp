@@ -24,10 +24,10 @@ int main() {
         {{{0, 0}, {1, 0}, {-1, 0}, {-1, -1}}}, //rL
     };
 
-    int current_block, next_block;
-    int cord_x, cord_y, state; // % 4
-    int time_cnt, score;
-    int gameover;
+    int current_block = 0, next_block = 1;
+    int cord_x = H - 2, cord_y = W / 2, state = 0; // % 4
+    int time_cnt = 0, score = 0;
+    int gameover = 1;
 
     auto render = [&]() -> void {
         // ==================================================
@@ -153,12 +153,11 @@ int main() {
             score = p.score; 
             gameover = p.gameover;
             time_cnt = p.time_cnt;
-
-            render();
         }
         
+        render();
 
-        if ((++cnt) % 600 == 0) {
+        if ((++cnt) % 60 == 0) {
             std::cout << "#\n";
             for (int i = 0; i < 16; i++) {
                 for (int j = 0; j < 10; j++) {

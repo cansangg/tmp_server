@@ -20,7 +20,7 @@ int main() {
     };
     std::mt19937 rnd(time(0));
 
-    int current_block, next_block;
+    int current_block, next_block;;
     int cord_x, cord_y, state; // % 4
     int time_cnt, score;
     int gameover;
@@ -97,7 +97,7 @@ int main() {
     auto onNewConnection = [&]() -> void {
         poller.m_clients.push_back(std::move(poller.m_server.acceptClient()));
         std::cout << poller.m_clients.back().getFd() << " enter" << std::endl;
-        std::cout << "current players: " << poller.m_clients.size() << std::endl;
+        std::cout << "curreent player: " << poller.m_clients.size() << std::endl;
     };
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
@@ -115,7 +115,7 @@ int main() {
                 if (client.getFd() == it->getFd()) {
                     std::cout << client.getFd() << " exit" << std::endl;
                     poller.m_clients.erase(it);
-                    std::cout << "current players: " << poller.m_clients.size() << std::endl;
+        s           std::cout << "curreent player: " << poller.m_clients.size() << std::endl;
                     break;
                 }
             }

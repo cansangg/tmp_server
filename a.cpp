@@ -111,10 +111,10 @@ int main() {
     };
 
     my::TcpSocket client;
-    client.connectTo("lengtiming.dpdns.org", 8080);
-    /*client.setBlocking(false);
+    client.connectTo("lengtiming.dpdns.org", 8000);
+    // client.setBlocking(false);
 
-    while (!WindowShouldClose()) {
+    /*while (!WindowShouldClose()) {
         if (IsKeyPressed(KEY_UP))    client.write("U");
         if (IsKeyPressed(KEY_LEFT))  client.write("L");
         if (IsKeyPressed(KEY_RIGHT)) client.write("R");
@@ -149,6 +149,5 @@ int main() {
     }
 
     CloseWindow();*/
-    while(1);
     return 0;
 }

@@ -97,11 +97,11 @@ int main() {
     auto onNewConnection = [&]() -> void {
         poller.m_clients.push_back(std::move(poller.m_server.acceptClient()));
         std::cout << poller.m_clients.back().getFd() << " enter" << std::endl;
+        std::cout << "current players: " << poller.m_clients.size() << std::endl;
     };
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
         std::string c = client.readExactly(1);
-        //std::cout << "#" << c << std::endl;
         if (!gameover) {
             if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << std::endl;
             if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;

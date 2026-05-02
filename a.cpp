@@ -113,7 +113,7 @@ int main() {
     my::TcpSocket client;
     client.connectTo("47.238.99.207", 8080);
     std::cout << "connected" << std::endl;
-    //client.setBlocking(false);
+    client.setBlocking(false);
 
     struct p_class {
         int g[16][10];
@@ -134,19 +134,21 @@ int main() {
 
         std::string data = client.readExactly(sizeof(p_class));
         
-        p_class p;
-        std::memcpy(&p, data.data(), sizeof(p_class));
-        
-        // 把箱子里的东西，倒腾回你那些散装的局部变量里，供 render() 使用！
-        for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) g[i][j] = p.g[i][j];
-        cord_x = p.cord_x; 
-        cord_y = p.cord_y; 
-        state = p.state;
-        current_block = p.current_block; 
-        next_block = p.next_block;
-        score = p.score; 
-        gameover = p.gameover;
-        time_cnt = p.time_cnt;
+        if (!data.empty()) { //延迟返回空串时防memcpy报错
+            p_class p;
+            std::memcpy(&p, data.data(), sizeof(p_class));
+            
+            // 把箱子里的东西，倒腾回你那些散装的局部变量里，供 render() 使用！
+            for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) g[i][j] = p.g[i][j];
+            cord_x = p.cord_x; 
+            cord_y = p.cord_y; 
+            state = p.state;
+            current_block = p.current_block; 
+            next_block = p.next_block;
+            score = p.score; 
+            gameover = p.gameover;
+            time_cnt = p.time_cnt;
+        }
         
         render();
 

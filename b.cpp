@@ -155,7 +155,10 @@ int main() {
             client.write(pkt_str);
         }
 
-        if ((++cnt) % 60 == 0) std::cout << '.' << std::endl;
+        if ((++cnt) % 60 == 0) {
+            std::cout << '.' << std::endl;
+            std::cout << poller.m_clients.size() << std::endl;
+        }
     }
 
     return 0;

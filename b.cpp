@@ -92,31 +92,31 @@ int main() {
     initgame();
 
     my::SelectPoller poller(8080);
-    std::cout << "started listening" << '\n';
+    std::cout << "started listening" << std::endl;
 
     auto onNewConnection = [&]() -> void {
         poller.m_clients.push_back(std::move(poller.m_server.acceptClient()));
-        std::cout << poller.m_clients.back().getFd() << " enter" << '\n';
+        std::cout << poller.m_clients.back().getFd() << " enter" << std::endl;
     };
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
         std::string c = client.readExactly(1);
         if (!gameover) {
-            if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << '\n';
-            if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << '\n';
-            if (c == "R") try_move(0, 1), std::cout << client.getFd() << " pressed R" << '\n';
-            if (c == "D") try_move(-1, 0), std::cout << client.getFd() << " pressed D" << '\n';
+            if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << std::endl;
+            if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;
+            if (c == "R") try_move(0, 1), std::cout << client.getFd() << " pressed R" << std::endl;
+            if (c == "D") try_move(-1, 0), std::cout << client.getFd() << " pressed D" << std::endl;
             if (++time_cnt > time_interval) {
                 time_cnt = 0;
                 if (!try_move(-1, 0)) place_and_loadnext_and_checkgameover();
             }
         } else {
-            if (c == "E") initgame(), std::cout << client.getFd() << " pressed E" << '\n';
+            if (c == "E") initgame(), std::cout << client.getFd() << " pressed E" << std::endl;
         }
         if (c == "") {
             for (auto it = poller.m_clients.begin(); it != poller.m_clients.end(); ++it) {
                 if (client.getFd() == it->getFd()) {
-                    std::cout << client.getFd() << " exit" << '\n';
+                    std::cout << client.getFd() << " exit" << std::endl;
                     poller.m_clients.erase(it);
                     break;
                 }

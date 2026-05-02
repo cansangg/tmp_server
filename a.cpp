@@ -112,6 +112,7 @@ int main() {
 
     my::TcpSocket client;
     client.connectTo("lengtiming.dpdns.org", 8000);
+    std::cout << "connected" << std::endl;
     // client.setBlocking(false);
 
     /*while (!WindowShouldClose()) {
@@ -146,8 +147,8 @@ int main() {
         
         render();
         std::cout << "???\n";
-    }
+    }*/
 
-    CloseWindow();*/
+    CloseWindow();
     return 0;
 }

@@ -112,12 +112,12 @@ int main() {
             if (c == "") {
                 std::cout << cli->getFd() << " exit" << std::endl;
                 poller.removeSocket(cli->getFd());
-                std::cout << "current player: " << poller.m_sockets.size() << std::endl;
+                std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
             }
         });
         std::cout << client.getFd() << " enter" << std::endl;
         poller.addSocket(std::move(client));
-        std::cout << "current player: " << poller.m_sockets.size() << std::endl;
+        std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
     });
     poller.addSocket(std::move(server));
 
@@ -152,7 +152,7 @@ int main() {
 
         std::string pkt_str((char*)&p, sizeof(p_class));
         for (auto& [fd, client] : poller.m_sockets) {
-            if (fd != 3/*server*/) client.write(pkt_str);
+            if (fd != 4/*server*/) client.write(pkt_str);
         }
     }
 

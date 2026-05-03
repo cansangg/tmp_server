@@ -102,7 +102,7 @@ int main() {
 
     auto onClientData = [&](my::TcpSocket& client) -> void {
         std::string c = client.readExactly(1);
-        if (client.getFd() > 5 && c.size()) {
+        if (client.getFd() == 4 && c.size()) {
             int old_block = current_block;
             current_block = rnd() % blocks.size();
             if (!try_move(0, 0)) current_block = old_block;

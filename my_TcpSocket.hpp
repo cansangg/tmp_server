@@ -43,14 +43,22 @@ namespace my {
         TcpSocket(const TcpSocket&) = delete;
         TcpSocket& operator=(const TcpSocket&) = delete;
         
-        TcpSocket(TcpSocket&& other) noexcept : fd(other.fd), in_buffer(std::move(other.in_buffer)) {
+        // 1. 补全移动构造函数
+        TcpSocket(TcpSocket&& other) noexcept : 
+            fd(other.fd), 
+            in_buffer(std::move(other.in_buffer)),
+            handle_event(std::move(other.handle_event)) // <== 救命稻草在这里！
+        {
             other.fd = -1;
         }
+
+        // 2. 补全移动赋值运算符
         TcpSocket& operator=(TcpSocket&& other) noexcept {
             if (this != &other) {
                 close();
                 fd = other.fd;
                 in_buffer = std::move(other.in_buffer);
+                handle_event = std::move(other.handle_event); // <== 还有这里！
                 other.fd = -1;
             }
             return *this;

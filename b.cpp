@@ -97,21 +97,21 @@ int main() {
 
     my::TcpSocket server;
     server.bindAndListen(8080);
-    server.setHandleEvent([&]() -> void {
-        my::TcpSocket client = server.acceptClient();
-        client.setHandleEvent([&]() -> void {
-            std::string c = client.readExactly(1);
+    server.setHandleEvent([&](my::TcpSocket* ser) -> void {
+        my::TcpSocket client = ser->acceptClient();
+        client.setHandleEvent([&](my::TcpSocket* cli) -> void {
+            std::string c = cli->readExactly(1);
             if (!gameover) {
-                if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << std::endl;
-                if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;
-                if (c == "R") try_move(0, 1), std::cout << client.getFd() << " pressed R" << std::endl;
-                if (c == "D") try_move(-1, 0), std::cout << client.getFd() << " pressed D" << std::endl;
+                if (c == "U") try_rotate(), std::cout << cli->getFd() << " pressed U" << std::endl;
+                if (c == "L") try_move(0, -1), std::cout << cli->getFd() << " pressed L" << std::endl;
+                if (c == "R") try_move(0, 1), std::cout << cli->getFd() << " pressed R" << std::endl;
+                if (c == "D") try_move(-1, 0), std::cout << cli->getFd() << " pressed D" << std::endl;
             } else {
-                if (c == "E") initgame(), std::cout << client.getFd() << " pressed E" << std::endl;
+                if (c == "E") initgame(), std::cout << cli->getFd() << " pressed E" << std::endl;
             }
             if (c == "") {
-                std::cout << client.getFd() << " exit" << std::endl;
-                poller.removeSocket(client.getFd());
+                std::cout << cli->getFd() << " exit" << std::endl;
+                poller.removeSocket(cli->getFd());
                 std::cout << "current player: " << poller.m_sockets.size() << std::endl;
             }
         });
@@ -119,6 +119,7 @@ int main() {
         std::cout << "current player: " << poller.m_sockets.size() << std::endl;
         poller.addSocket(std::move(client));
     });
+    poller.addSocket(std::move(server));
 
     struct p_class {
         int g[16][10];

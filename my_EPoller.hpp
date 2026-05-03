@@ -58,7 +58,7 @@ namespace my {
 
             for (int i = 0; i < n; ++i) {
                 int fd = events[i].data.fd;
-                m_sockets[fd].handle_event();
+                m_sockets[fd].handle_event(&m_sockets[fd]);
             }
         }
     };

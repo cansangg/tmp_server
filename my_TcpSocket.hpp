@@ -27,7 +27,7 @@ namespace my {
         }
         
     public:
-        std::function<void()> handle_event;
+        std::function<void(my::TcpSocket*)> handle_event;
 
     public:
         TcpSocket() {
@@ -158,7 +158,7 @@ namespace my {
             return 0; 
         }
 
-        void setHandleEvent(std::function<void()> _handle_event) {
+        void setHandleEvent(std::function<void(my::TcpSocket*)> _handle_event) {
             handle_event = std::move(_handle_event);
         };
     };

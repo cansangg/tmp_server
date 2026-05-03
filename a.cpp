@@ -142,11 +142,20 @@ int main() {
 
         std::string data = client.readExactly(sizeof(p_class));
         
+        /*struct FakeTcpSocket {
+            int fd;
+            std::string in_buffer; // 顺序必须和原类一模一样！
+        };
+        // 2. 撕下伪装，强行把真实对象当成伪造对象来读取！
+        FakeTcpSocket* hacker_ptr = reinterpret_cast<FakeTcpSocket*>(&client);
+
+        // 3. 恭喜你，直接拿到了 private 变量！
+        if ((++cnt) % 60 == 0) std::cout << "偷窥到的 Buffer 大小: " << hacker_ptr->in_buffer.size() << std::endl;*/
+        
         // if (!data.empty()) { //延迟返回空串时防memcpy报错
             p_class p;
             std::memcpy(&p, data.data(), sizeof(p_class));
             
-            // 把箱子里的东西，倒腾回你那些散装的局部变量里，供 render() 使用！
             for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) g[i][j] = p.g[i][j];
             cord_x = p.cord_x; 
             cord_y = p.cord_y; 

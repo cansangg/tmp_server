@@ -114,7 +114,6 @@ int main() {
     my::TcpSocket client;
     client.connectTo("47.238.99.207", 8080);
     std::cout << "connected" << std::endl;
-    //client.setBlocking(false);
 
     struct p_class {
         int g[16][10];

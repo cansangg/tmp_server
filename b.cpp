@@ -3,7 +3,7 @@
 #include <random>
 #include <algorithm>
 
-#include "my_SelectPoller.hpp"
+#include "my_EPoller.hpp"
 
 
 int main() {
@@ -91,36 +91,34 @@ int main() {
 
     initgame();
 
-    my::SelectPoller poller(8080);
+
+    my::EPoller poller;
     std::cout << "started listening" << std::endl;
 
-    auto onNewConnection = [&]() -> void {
-        poller.m_clients.push_back(std::move(poller.m_server.acceptClient()));
-        std::cout << poller.m_clients.back().getFd() << " enter" << std::endl;
-        std::cout << "current player: " << poller.m_clients.size() << std::endl;
-    };
-
-    auto onClientData = [&](my::TcpSocket& client) -> void {
-        std::string c = client.readExactly(1);
-        if (!gameover) {
-            if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << std::endl;
-            if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;
-            if (c == "R") try_move(0, 1), std::cout << client.getFd() << " pressed R" << std::endl;
-            if (c == "D") try_move(-1, 0), std::cout << client.getFd() << " pressed D" << std::endl;
-        } else {
-            if (c == "E") initgame(), std::cout << client.getFd() << " pressed E" << std::endl;
-        }
-        if (c == "") {
-            for (auto it = poller.m_clients.begin(); it != poller.m_clients.end(); ++it) {
-                if (client.getFd() == it->getFd()) {
-                    std::cout << client.getFd() << " exit" << std::endl;
-                    poller.m_clients.erase(it);
-                    std::cout << "current player: " << poller.m_clients.size() << std::endl;
-                    break;
-                }
+    my::TcpSocket server;
+    server.bindAndListen(8080);
+    server.setHandleEvent([&]() -> void {
+        my::TcpSocket client = server.acceptClient();
+        client.setHandleEvent([&]() -> void {
+            std::string c = client.readExactly(1);
+            if (!gameover) {
+                if (c == "U") try_rotate(), std::cout << client.getFd() << " pressed U" << std::endl;
+                if (c == "L") try_move(0, -1), std::cout << client.getFd() << " pressed L" << std::endl;
+                if (c == "R") try_move(0, 1), std::cout << client.getFd() << " pressed R" << std::endl;
+                if (c == "D") try_move(-1, 0), std::cout << client.getFd() << " pressed D" << std::endl;
+            } else {
+                if (c == "E") initgame(), std::cout << client.getFd() << " pressed E" << std::endl;
             }
-        }
-    };
+            if (c == "") {
+                std::cout << client.getFd() << " exit" << std::endl;
+                poller.removeSocket(client.getFd());
+                std::cout << "current player: " << poller.m_sockets.size() << std::endl;
+            }
+        });
+        std::cout << client.getFd() << " enter" << std::endl;
+        std::cout << "current player: " << poller.m_sockets.size() << std::endl;
+        poller.addSocket(std::move(client));
+    });
 
     struct p_class {
         int g[16][10];
@@ -133,7 +131,7 @@ int main() {
 
 
     while (true) {
-        poller.poll(1000 / 60, onNewConnection, onClientData);
+        poller.poll(1000 / 60);
 
         if (!gameover && ++time_cnt > time_interval) {
             time_cnt = 0;
@@ -152,8 +150,8 @@ int main() {
         p.time_cnt = time_cnt;
 
         std::string pkt_str((char*)&p, sizeof(p_class));
-        for (auto& client : poller.m_clients) {
-            client.write(pkt_str);
+        for (auto& [fd, client] : poller.m_sockets) {
+            if (fd != 3/*server*/) client.write(pkt_str);
         }
     }
 

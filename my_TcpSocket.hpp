@@ -25,6 +25,9 @@ namespace my {
             in_buffer.append(tmp_buf, bytes_read);
             return true;
         }
+        
+    public:
+        std::function<void()> handle_event;
 
     public:
         TcpSocket() {
@@ -155,21 +158,9 @@ namespace my {
             return 0; 
         }
 
-        void setBlocking(bool blocking) { //设置::read(this->fd)时非堵塞
-            if (fd < 0) return;
-            int flags = fcntl(fd, F_GETFL, 0);
-            if (flags == -1) throw std::runtime_error("fcntl F_GETFL 失败");
-
-            if (!blocking) {
-                flags |= O_NONBLOCK;  
-            } else {
-                flags &= ~O_NONBLOCK; 
-            }
-
-            if (fcntl(fd, F_SETFL, flags) == -1) {
-                throw std::runtime_error("fcntl F_SETFL 失败");
-            }
-        }
+        void setHandleEvent(std::function<void()> _handle_event) {
+            handle_event = std::move(_handle_event);
+        };
     };
 }
 

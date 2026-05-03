@@ -114,7 +114,7 @@ int main() {
     my::TcpSocket client;
     client.connectTo("47.238.99.207", 8080);
     std::cout << "connected" << std::endl;
-    client.setBlocking(false);
+    //client.setBlocking(false);
 
     struct p_class {
         int g[16][10];
@@ -133,14 +133,16 @@ int main() {
         if (IsKeyPressed(KEY_DOWN))  client.write("D");
         if (IsKeyPressed(KEY_ENTER)) client.write("E");
 
-        std::string data;
+        /*std::string data;
         while (true) {
             std::string current_data = client.readExactly(sizeof(p_class));
             if (current_data.empty()) break; // 抽干了，跳出
             data = std::move(current_data); // 永远覆盖，只留最新的
-        }
+        }*/
+
+        std::string data = client.readExactly(sizeof(p_class));
         
-        if (!data.empty()) { //延迟返回空串时防memcpy报错
+        // if (!data.empty()) { //延迟返回空串时防memcpy报错
             p_class p;
             std::memcpy(&p, data.data(), sizeof(p_class));
             
@@ -154,7 +156,7 @@ int main() {
             score = p.score; 
             gameover = p.gameover;
             time_cnt = p.time_cnt;
-        }
+        // }
         
         render();
     }

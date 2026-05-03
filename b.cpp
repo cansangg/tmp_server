@@ -115,9 +115,9 @@ int main() {
                 std::cout << "current player: " << poller.m_sockets.size() << std::endl;
             }
         });
+        poller.addSocket(std::move(client));
         std::cout << client.getFd() << " enter" << std::endl;
         std::cout << "current player: " << poller.m_sockets.size() << std::endl;
-        poller.addSocket(std::move(client));
     });
     poller.addSocket(std::move(server));
 

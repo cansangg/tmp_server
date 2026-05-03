@@ -11,7 +11,7 @@
 int main() {
     constexpr int win_w = 1200, win_h = 900;
     InitWindow(win_w, win_h, "C++ Raylib game");
-    SetTargetFPS(60);
+    //SetTargetFPS(60);
     
     constexpr int time_interval = 20, H = 16, W = 10;
     std::vector<std::vector<int>> g(H, std::vector<int>(W, 0));

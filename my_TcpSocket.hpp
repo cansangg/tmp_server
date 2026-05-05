@@ -11,6 +11,7 @@
 #include <cerrno>
 #include <optional>
 #include <functional>
+#include <netinet/tcp.h>
 
 // size_t: 3
 // fd_kernel_buffer: {'U', 'R', EOF} 
@@ -26,6 +27,8 @@ namespace my {
         bool is_closed = false;
 
         explicit TcpSocket(int client_fd) : fd(client_fd) {
+            int opt = 1;
+            setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)); //tcp包不打成大包发出
             setBlocking(false); //默认非堵塞防半包时readExactly堵很久
         }
 
@@ -63,6 +66,7 @@ namespace my {
             
             int opt = 1;
             setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); //(待填坑tcp挥手)
+            setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)); //tcp包不打成大包发出
 
             setBlocking(false); //默认非堵塞防半包时readExactly堵很久(作为接客fd时也要让accept非堵塞防RST)
         }

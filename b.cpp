@@ -113,7 +113,7 @@ int main() {
             } else {
                 if (c == "E") initgame(), std::cout << cli->getFd() << " pressed E" << std::endl;
             }
-            if (c == "") {
+            if (c == "" && cli->isClosed()) {
                 std::cout << cli->getFd() << " exit" << std::endl;
                 poller.removeSocket(cli->getFd());
                 std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;

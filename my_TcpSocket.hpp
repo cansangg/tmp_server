@@ -21,7 +21,7 @@ namespace my {
     private:
         int fd;
         std::string in_buffer;
-        bool is_closed = false;
+        bool private_is_closed = false;
 
         explicit TcpSocket(int client_fd) : fd(client_fd) {
             int opt = 1;
@@ -30,7 +30,7 @@ namespace my {
         }
 
         bool recv_to_buffer() {
-            if (fd < 0 || is_closed) return false;
+            if (fd < 0 || private_is_closed) return false;
             char tmp_buf[4096];
             int bytes_read = ::read(fd, tmp_buf, sizeof(tmp_buf));
             
@@ -40,7 +40,7 @@ namespace my {
                 return true;
             } else if (bytes_read == 0) {
                 // 【情况2：和平分手】收到对端的 FIN 包 (EOF)
-                is_closed = true;
+                private_is_closed = true;
                 return false;
             } else /*if (bytes_read < 0)*/ {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -48,7 +48,7 @@ namespace my {
                     return false; 
                 }
                 // 【情况4：意外暴毙】比如收到 RST 重置包
-                is_closed = true;
+                private_is_closed = true;
                 return false;
             }
         }
@@ -86,10 +86,10 @@ namespace my {
             fd(other.fd), 
             in_buffer(std::move(other.in_buffer)),
             handle_event(std::move(other.handle_event)),
-            is_closed(other.is_closed)
+            private_is_closed(other.private_is_closed)
         {
             other.fd = -1;
-            other.is_closed = true;
+            other.private_is_closed = true;
         }
 
         // 2. 补全移动赋值运算符
@@ -99,14 +99,14 @@ namespace my {
                 fd = other.fd;
                 in_buffer = std::move(other.in_buffer);
                 handle_event = std::move(other.handle_event);
-                is_closed = other.is_closed;
+                private_is_closed = other.private_is_closed;
                 other.fd = -1;
-                other.is_closed = true;
+                other.private_is_closed = true;
             }
             return *this;
         }
 
-        void connectTo(const std::string& host, int port) { //客户端函数
+        void connectTo(const std::string& host, int port) {
             struct hostent* he = gethostbyname(host.c_str());
             if (he == nullptr) throw std::runtime_error("域名解析失败: " + host);
             
@@ -134,7 +134,7 @@ namespace my {
             }
         }
 
-        void bindAndListen(int port, int backlog = 128) { //服务端函数
+        void bindAndListen(int port, int backlog = 128) {
             struct sockaddr_in addr;
             std::memset(&addr, 0, sizeof(addr));
             addr.sin_family = AF_INET;
@@ -175,19 +175,13 @@ namespace my {
             return TcpSocket(client_fd); // 自动包装成 optional 成功态
         }
 
-        bool write(const std::string& msg) {
-            if (fd < 0) return false;
-            ssize_t sent = ::send(fd, msg.c_str(), msg.length(), MSG_NOSIGNAL);
-            return sent == (ssize_t)msg.length();
-        }
-
         //std::nullopt: 关闭连接
         //std::optional<"">：非堵塞读取,暂无数据
         //std::optional<"LRU">：读到数据
         std::optional<std::string> readExactly(size_t length) {
             while (in_buffer.length() < length) {
                 if (!recv_to_buffer()) {
-                    if (is_closed) return std::nullopt;
+                    if (private_is_closed) return std::nullopt;
                     else return ""; 
                 }
             }
@@ -207,18 +201,22 @@ namespace my {
                     return result;
                 }
                 if (!recv_to_buffer()) {
-                    if (is_closed) return std::nullopt;
+                    if (private_is_closed) return std::nullopt;
                     else return ""; 
                 }
             }
         }
 
+        bool write(const std::string& msg) {
+            if (fd < 0) return false;
+            ssize_t sent = ::send(fd, msg.c_str(), msg.length(), MSG_NOSIGNAL);
+            return sent == (ssize_t)msg.length();
+        }
+
         int getFd() const { return fd; }
 
-        bool isClosed() const { return is_closed; }
-
         void setBlocking(bool blocking) { //设置::read(this->fd)时非堵塞
-            if (fd < 0 || is_closed) return;
+            if (fd < 0 || private_is_closed) return;
             int flags = fcntl(fd, F_GETFL, 0);
             if (flags == -1) throw std::runtime_error("fcntl F_GETFL 失败");
 

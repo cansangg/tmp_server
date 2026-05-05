@@ -111,11 +111,22 @@ namespace my {
             addr.sin_port = htons(port);
             addr.sin_addr = *(struct in_addr*)he->h_addr_list[0];
 
-            setBlocking(true); //客户端的::connect必须堵塞
+            int flags = fcntl(fd, F_GETFL, 0);
+            if (flags == -1) throw std::runtime_error("fcntl 获取状态失败");
+            bool is_originally_blocking = (flags & O_NONBLOCK) == 0;
+
+            setBlocking(true); 
+            
+            int connect_err = 0;
             if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-                throw std::runtime_error(std::string("连接服务器失败: ") + strerror(errno));
+                connect_err = errno;
             }
-            setBlocking(false);
+
+            setBlocking(is_originally_blocking);
+
+            if (connect_err != 0) {
+                throw std::runtime_error(std::string("连接服务器失败: ") + strerror(connect_err));
+            }
         }
 
         void bindAndListen(int port, int backlog = 128) { //服务端函数

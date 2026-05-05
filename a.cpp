@@ -135,7 +135,7 @@ int main() {
         std::string data;
         while (true) {
             std::optional<std::string> opt_current_data = client.readExactly(sizeof(p_class)); // 非堵塞读取
-            if (opt_current_data == std::nullopt || opt_current_data->empty()) break; // 抽干了，跳出
+            if (!opt_current_data || opt_current_data->empty()) break; // 抽干了，跳出
             data = std::move(*opt_current_data); // 永远覆盖，只留最新的
         }
         if (client.isClosed()) break; //服务端关闭连接

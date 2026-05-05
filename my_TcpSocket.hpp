@@ -22,7 +22,6 @@ namespace my {
         int fd;
         std::string in_buffer;
         bool is_closed = false;
-        std::function<void(my::TcpSocket*)> handle_event;
 
         explicit TcpSocket(int client_fd) : fd(client_fd) {
             int opt = 1;
@@ -61,6 +60,9 @@ namespace my {
                 in_buffer.clear();
             }
         }
+
+    public:
+        std::function<void(my::TcpSocket*)> handle_event;
 
     public:
         TcpSocket() {

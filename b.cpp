@@ -104,19 +104,24 @@ int main() {
         if (!opt_client) return;
         my::TcpSocket client = std::move(*opt_client);
         client.setHandleEvent([&](my::TcpSocket* cli) -> void {
-            std::string c = cli->readExactly(1);
-            if (!gameover) {
-                if (c == "U") try_rotate(), std::cout << cli->getFd() << " pressed U" << std::endl;
-                if (c == "L") try_move(0, -1), std::cout << cli->getFd() << " pressed L" << std::endl;
-                if (c == "R") try_move(0, 1), std::cout << cli->getFd() << " pressed R" << std::endl;
-                if (c == "D") try_move(-1, 0), std::cout << cli->getFd() << " pressed D" << std::endl;
-            } else {
-                if (c == "E") initgame(), std::cout << cli->getFd() << " pressed E" << std::endl;
-            }
-            if (c == "" && cli->isClosed()) {
-                std::cout << cli->getFd() << " exit" << std::endl;
-                poller.removeSocket(cli->getFd());
-                std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
+            while (true) { // 防粘包
+                std::string c = cli->readExactly(1);
+                if (!gameover) {
+                    if (c == "U") try_rotate(), std::cout << cli->getFd() << " pressed U" << std::endl;
+                    if (c == "L") try_move(0, -1), std::cout << cli->getFd() << " pressed L" << std::endl;
+                    if (c == "R") try_move(0, 1), std::cout << cli->getFd() << " pressed R" << std::endl;
+                    if (c == "D") try_move(-1, 0), std::cout << cli->getFd() << " pressed D" << std::endl;
+                } else {
+                    if (c == "E") initgame(), std::cout << cli->getFd() << " pressed E" << std::endl;
+                }
+                if (c == "") {
+                    if (cli->isClosed()) {
+                        std::cout << cli->getFd() << " exit" << std::endl;
+                        poller.removeSocket(cli->getFd());
+                        std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
+                    }
+                    break;
+                }
             }
         });
         std::cout << client.getFd() << " enter" << std::endl;

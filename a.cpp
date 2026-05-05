@@ -126,11 +126,11 @@ int main() {
 
     int cnt = 0;
     while (!WindowShouldClose()) {
-        if (IsKeyPressed(KEY_UP))    client.write("U");
-        if (IsKeyPressed(KEY_LEFT))  client.write("L");
-        if (IsKeyPressed(KEY_RIGHT)) client.write("R");
-        if (IsKeyPressed(KEY_DOWN))  client.write("D");
-        if (IsKeyPressed(KEY_ENTER)) client.write("E");
+        if (IsKeyPressed(KEY_UP))    client.write("U"), std::cout << "pressed U\n";
+        if (IsKeyPressed(KEY_LEFT))  client.write("L"), std::cout << "pressed L\n";
+        if (IsKeyPressed(KEY_RIGHT)) client.write("R"), std::cout << "pressed R\n";
+        if (IsKeyPressed(KEY_DOWN))  client.write("D"), std::cout << "pressed D\n";
+        if (IsKeyPressed(KEY_ENTER)) client.write("E"), std::cout << "pressed E\n";
 
         std::string data;
         while (true) {

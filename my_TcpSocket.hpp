@@ -47,7 +47,7 @@ namespace my {
                 return false;
             } else /*if (bytes_read < 0)*/ {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    // **【情况3：暂无数据】这是非阻塞的正常现象，连接没死！**
+                    // **【情况3：暂无数据】这是非阻塞才有的正常现象，连接没死！**
                     return false; 
                 }
                 // 【情况4：意外暴毙】比如收到 RST 重置包

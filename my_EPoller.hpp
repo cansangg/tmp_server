@@ -4,7 +4,7 @@
 #include "my_TcpSocket.hpp"
 
 namespace my {
-    class EPoller {
+    class EPoller { //effective轮询机？^_^
     private:
         int epfd;
     public:
@@ -44,7 +44,7 @@ namespace my {
 
             for (int i = 0; i < n; ++i) {
                 int fd = events[i].data.fd;
-                m_sockets[fd].handle_event(&m_sockets[fd]);
+                m_sockets[fd].handle_event(&m_sockets[fd]); //TcpSocket响了自己回调处理
             }
         }
     };

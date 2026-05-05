@@ -16,15 +16,13 @@
 // size_t: 3
 // fd_kernel_buffer: {'U', 'R', EOF} 
 
-//非堵塞式：没读到数据需检查是 暂无数据or关闭连接
-//堵塞式：没读到数据即 关闭连接
-
 namespace my {
     class TcpSocket { 
     private:
         int fd;
         std::string in_buffer;
         bool is_closed = false;
+        std::function<void(my::TcpSocket*)> handle_event;
 
         explicit TcpSocket(int client_fd) : fd(client_fd) {
             int opt = 1;
@@ -55,9 +53,14 @@ namespace my {
                 return false;
             }
         }
-        
-    public:
-        std::function<void(my::TcpSocket*)> handle_event;
+
+        void close() {
+            if (fd != -1) {
+                ::close(fd);
+                fd = -1;
+                in_buffer.clear();
+            }
+        }
 
     public:
         TcpSocket() {
@@ -142,10 +145,13 @@ namespace my {
                 throw std::runtime_error("Listen 失败!");
         }
 
+
+        //std::nullopt: 非堵塞读取,暂无数据
+        //std::optional<TcpSocket{}>：读到数据
         std::optional<TcpSocket> acceptClient() {
             struct sockaddr_in client_addr;
             socklen_t len = sizeof(client_addr);
-            int client_fd = ::accept(fd, (struct sockaddr*)&client_addr, &len);
+            int client_fd = ::accept(fd, (struct sockaddr*)&client_addr, &len); //先EPoller提示响了(或主动摸)，再::accept()尝试去非堵塞读
             
             if (client_fd < 0) {
                 // 【常态 1】：非阻塞队列被抽干了，门外没客人了
@@ -173,7 +179,22 @@ namespace my {
             return sent == (ssize_t)msg.length();
         }
 
-        std::string readUntil(const std::string& delimiter) {
+        //std::nullopt: 关闭连接
+        //std::optional<"">：非堵塞读取,暂无数据
+        //std::optional<"LRU">：读到数据
+        std::optional<std::string> readExactly(size_t length) {
+            while (in_buffer.length() < length) {
+                if (!recv_to_buffer()) {
+                    if (is_closed) return std::nullopt;
+                    else return ""; 
+                }
+            }
+            std::string result = in_buffer.substr(0, length);
+            in_buffer.erase(0, length);
+            return result;
+        }
+
+        std::optional<std::string> readUntil(const std::string& delimiter) {
             while (true) {
                 size_t pos = in_buffer.find(delimiter);
                 if (pos != std::string::npos) {
@@ -182,50 +203,16 @@ namespace my {
                     in_buffer.erase(0, extract_len); 
                     return result;
                 }
-                if (!recv_to_buffer()) return ""; 
+                if (!recv_to_buffer()) {
+                    if (is_closed) return std::nullopt;
+                    else return ""; 
+                }
             }
         }
 
-        std::string readExactly(size_t length) {
-            while (in_buffer.length() < length) {
-                if (!recv_to_buffer()) return ""; 
-            }
-            std::string result = in_buffer.substr(0, length);
-            in_buffer.erase(0, length);
-            return result;
-        }
-
-        void close() {
-            if (fd != -1) {
-                ::close(fd);
-                fd = -1;
-                in_buffer.clear();
-            }
-        }
-        
         int getFd() const { return fd; }
 
         bool isClosed() const { return is_closed; }
-
-        static size_t getBodyLength(const std::string& header) {
-            size_t pos = header.find("Content-Length:");
-            if (pos == std::string::npos) pos = header.find("content-length:");
-
-            if (pos != std::string::npos) {
-                pos += 15; 
-                size_t end_pos = header.find("\r\n", pos);
-                
-                if (end_pos != std::string::npos) {
-                    try {
-                        std::string num_str = header.substr(pos, end_pos - pos);
-                        return std::stoull(num_str);
-                    } catch (const std::exception&) {
-                        return 0;
-                    }
-                }
-            }
-            return 0; 
-        }
 
         void setBlocking(bool blocking) { //设置::read(this->fd)时非堵塞
             if (fd < 0 || is_closed) return;
@@ -246,9 +233,30 @@ namespace my {
         void setHandleEvent(std::function<void(my::TcpSocket*)> _handle_event) {
             handle_event = std::move(_handle_event);
         };
+
+        static size_t getBodyLength(const std::string& header) {
+            size_t pos = header.find("Content-Length:");
+            if (pos == std::string::npos) pos = header.find("content-length:");
+
+            if (pos != std::string::npos) {
+                pos += 15; 
+                size_t end_pos = header.find("\r\n", pos);
+                
+                if (end_pos != std::string::npos) {
+                    try {
+                        std::string num_str = header.substr(pos, end_pos - pos);
+                        return std::stoull(num_str);
+                    } catch (const std::exception&) {
+                        return 0;
+                    }
+                }
+            }
+            return 0; 
+        }
     };
 }
 
 // 值传递 = 必须在函数内部构造一个新对象。至于怎么构造？既可以是拷贝构造，也可以是移动构造
 // 传右值时，值传递会引发移动（只要你写了移动构造）。
 // const T& 传右值也只会拷贝构造
+// 函数传参一定有新对象(形参)的建立

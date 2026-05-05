@@ -106,7 +106,7 @@ int main() {
         client.setHandleEvent([&](my::TcpSocket* cli) -> void {
             while (true) { // 防粘包
                 std::optional<std::string> opt_c = cli->readExactly(1);
-                if (opt_c == std::nullopt) {
+                if (!opt_c) {
                     std::cout << cli->getFd() << " exit" << std::endl;
                     poller.removeSocket(cli->getFd());
                     std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;

@@ -196,6 +196,7 @@ namespace my {
             return result;
         }
 
+        //http协议用readUntil("\r\n\r\n")实现瞄一眼效果
         std::optional<std::string> readUntil(const std::string& delimiter) {
             while (true) {
                 size_t pos = in_buffer.find(delimiter);

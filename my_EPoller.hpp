@@ -31,13 +31,7 @@ namespace my {
             m_sockets.emplace(fd, std::move(sock));
         }
 
-        void removeSocket(int fd) {
-            // 当 map.erase 被调用时，TcpSocket 触发析构，调用 close(fd)。
-            // Linux底层 fd 关闭时，会自动从 epoll 的红黑树上剔除，无需 epoll_ctl DEL！
-            m_sockets.erase(fd); 
-        }
-
-        void add_to_remove(int fd) {
+        void removeSocketLazy(int fd) { //懒删除
             to_remove.push_back(fd);
         }
 
@@ -53,7 +47,9 @@ namespace my {
             }
 
             for (int fd : to_remove) {
-                removeSocket(fd); //懒删除
+                // 当 map.erase 被调用时，TcpSocket 触发析构，调用 close(fd)。
+                // Linux底层 fd 关闭时，会自动从 epoll 的红黑树上剔除，无需 epoll_ctl DEL！
+                m_sockets.erase(fd); 
             }
             to_remove.clear();
         }

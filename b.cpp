@@ -110,6 +110,7 @@ int main() {
                     std::cout << cli->getFd() << " exit" << std::endl;
                     poller.removeSocket(cli->getFd());
                     std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
+                    break;
                 } else if (opt_c->empty()) {
                     break;
                 } else {

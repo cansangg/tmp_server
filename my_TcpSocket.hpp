@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <cerrno>
+#include <optional>
+#include <functional>
 
 // size_t: 3
 // fd_kernel_buffer: {'U', 'R', EOF} 
@@ -40,7 +42,7 @@ namespace my {
                 // 【情况2：和平分手】收到对端的 FIN 包 (EOF)
                 is_closed = true;
                 return false;
-            } else if (bytes_read < 0) {
+            } else /*if (bytes_read < 0)*/ {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     // **【情况3：暂无数据】这是非阻塞的正常现象，连接没死！**
                     return false; 

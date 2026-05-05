@@ -5,7 +5,7 @@ TARGET = a.out
 
 # 默认只编译
 $(TARGET): a.cpp
-	$(CXX) a.cpp -o $(TARGET) $(LIBS)
+	$(CXX) a.cpp -o $(TARGET) $(LIBS) -std=c++17
 
 # 【核心：一键编译 + 软件渲染运行】
 # 这里不需要 &&，因为 make 会按顺序检查依赖

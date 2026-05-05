@@ -11,7 +11,7 @@
 int main() {
     constexpr int win_w = 1200, win_h = 900;
     InitWindow(win_w, win_h, "C++ Raylib game");
-    //SetTargetFPS(60);
+    SetTargetFPS(60);
     
     constexpr int time_interval = 20, H = 16, W = 10;
     std::vector<std::vector<int>> g(H, std::vector<int>(W, 0));
@@ -132,26 +132,14 @@ int main() {
         if (IsKeyPressed(KEY_DOWN))  client.write("D");
         if (IsKeyPressed(KEY_ENTER)) client.write("E");
 
-        /*std::string data;
+        std::string data;
         while (true) {
-            std::string current_data = client.readExactly(sizeof(p_class));
+            std::string current_data = client.readExactly(sizeof(p_class)); // 非堵塞读取·
             if (current_data.empty()) break; // 抽干了，跳出
             data = std::move(current_data); // 永远覆盖，只留最新的
-        }*/
-
-        std::string data = client.readExactly(sizeof(p_class));
+        }
         
-        /*struct FakeTcpSocket {
-            int fd;
-            std::string in_buffer; // 顺序必须和原类一模一样！
-        };
-        // 2. 撕下伪装，强行把真实对象当成伪造对象来读取！
-        FakeTcpSocket* hacker_ptr = reinterpret_cast<FakeTcpSocket*>(&client);
-
-        // 3. 恭喜你，直接拿到了 private 变量！
-        if ((++cnt) % 60 == 0) std::cout << "偷窥到的 Buffer 大小: " << hacker_ptr->in_buffer.size() << std::endl;*/
-        
-        // if (!data.empty()) { //延迟返回空串时防memcpy报错
+        if (!data.empty()) { //延迟返回空串时防memcpy报错
             p_class p;
             std::memcpy(&p, data.data(), sizeof(p_class));
             
@@ -164,7 +152,7 @@ int main() {
             score = p.score; 
             gameover = p.gameover;
             time_cnt = p.time_cnt;
-        // }
+        }
         
         render();
     }

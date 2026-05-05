@@ -2,6 +2,8 @@
 #include <array>
 #include <random>
 #include <algorithm>
+#include <optional>
+#include <functional>
 
 #include "my_EPoller.hpp"
 
@@ -98,7 +100,9 @@ int main() {
     my::TcpSocket server;
     server.bindAndListen(8080);
     server.setHandleEvent([&](my::TcpSocket* ser) -> void {
-        my::TcpSocket client = ser->acceptClient();
+        std::optional<my::TcpSocket> opt_client = ser->acceptClient();
+        if (!opt_client) return;
+        my::TcpSocket client = std::move(*opt_client);
         client.setHandleEvent([&](my::TcpSocket* cli) -> void {
             std::string c = cli->readExactly(1);
             if (!gameover) {

@@ -108,8 +108,9 @@ int main() {
                 std::optional<std::string> opt_c = cli->readExactly(1);
                 if (!opt_c) {
                     std::cout << cli->getFd() << " exit" << std::endl;
-                    poller.removeSocket(cli->getFd());
-                    std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
+                    // poller.removeSocket(cli->getFd()); 妙
+                    poller.add_to_remove(cli->getFd());
+                    std::cout << "current player: " << poller.m_sockets.size() - 1 - poller.to_remove.size() << std::endl;
                     break;
                 } else if (opt_c->empty()) {
                     break;
@@ -128,7 +129,7 @@ int main() {
         });
         std::cout << client.getFd() << " enter" << std::endl;
         poller.addSocket(std::move(client));
-        std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
+        std::cout << "current player: " << poller.m_sockets.size() - 1 - - poller.to_remove.size()<< std::endl;
     });
     poller.addSocket(std::move(server));
 
@@ -168,4 +169,14 @@ int main() {
     }
 
     return 0;
+}
+
+{
+    std::function<void() fn;
+    {
+        fn = [&]() -> void {
+            std::cout << "666\n";
+        }
+    }
+    fn();
 }

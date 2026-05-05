@@ -9,6 +9,7 @@ namespace my {
         int epfd;
     public:
         std::unordered_map<int, my::TcpSocket> m_sockets; 
+        std::vector<int> to_remove;
 
     public: 
         EPoller() {
@@ -36,6 +37,10 @@ namespace my {
             m_sockets.erase(fd); 
         }
 
+        void add_to_remove(int fd) {
+            to_remove.push_back(fd);
+        }
+
         void poll(int timeout_ms) {
             const int MAX_EVENTS = 1024;
             struct epoll_event events[MAX_EVENTS];
@@ -46,6 +51,11 @@ namespace my {
                 int fd = events[i].data.fd;
                 m_sockets[fd].handle_event(&m_sockets[fd]); //TcpSocket响了自己回调处理
             }
+
+            for (int fd : to_remove) {
+                removeSocket(fd); //懒删除
+            }
+            to_remove.clear();
         }
     };
 }

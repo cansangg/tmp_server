@@ -1,305 +1,9 @@
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <stdexcept>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <cerrno>
-#include <optional>
-#include <functional>
-
-// size_t: 3
-// fd_kernel_buffer: {'U', 'R', EOF} 
-
-//非堵塞式：没读到数据需检查是 暂无数据or关闭连接
-//堵塞式：没读到数据即 关闭连接
-
-namespace my {
-    class TcpSocket { 
-    private:
-        int fd;
-        std::string in_buffer;
-        bool is_closed = false;
-
-        explicit TcpSocket(int client_fd) : fd(client_fd) {
-            setBlocking(false); //默认非堵塞防半包时readExactly堵很久
-        }
-
-        bool recv_to_buffer() {
-            if (fd < 0 || is_closed) return false;
-            char tmp_buf[4096];
-            int bytes_read = ::read(fd, tmp_buf, sizeof(tmp_buf));
-            
-            if (bytes_read > 0) {
-                // 【情况1：健康】成功拿到数据
-                in_buffer.append(tmp_buf, bytes_read);
-                return true;
-            } else if (bytes_read == 0) {
-                // 【情况2：和平分手】收到对端的 FIN 包 (EOF)
-                is_closed = true;
-                return false;
-            } else /*if (bytes_read < 0)*/ {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    // **【情况3：暂无数据】这是非阻塞的正常现象，连接没死！**
-                    return false; 
-                }
-                // 【情况4：意外暴毙】比如收到 RST 重置包
-                is_closed = true;
-                return false;
-            }
-        }
-        
-    public:
-        std::function<void(my::TcpSocket*)> handle_event;
-
-    public:
-        TcpSocket() {
-            fd = socket(AF_INET, SOCK_STREAM, 0);
-            if (fd < 0) throw std::runtime_error("Socket 创建失败!");
-            
-            int opt = 1;
-            setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); //(待填坑tcp挥手)
-
-            setBlocking(false); //默认非堵塞防半包时readExactly堵很久(作为接客fd时也要让accept非堵塞防RST)
-        }
-
-        ~TcpSocket() { close(); }
-
-        TcpSocket(const TcpSocket&) = delete;
-        TcpSocket& operator=(const TcpSocket&) = delete;
-        
-        // 1. 补全移动构造函数
-        TcpSocket(TcpSocket&& other) noexcept : 
-            fd(other.fd), 
-            in_buffer(std::move(other.in_buffer)),
-            handle_event(std::move(other.handle_event)),
-            is_closed(other.is_closed)
-        {
-            other.fd = -1;
-            other.is_closed = true;
-        }
-
-        // 2. 补全移动赋值运算符
-        TcpSocket& operator=(TcpSocket&& other) noexcept {
-            if (this != &other) {
-                close();
-                fd = other.fd;
-                in_buffer = std::move(other.in_buffer);
-                handle_event = std::move(other.handle_event);
-                is_closed = other.is_closed;
-                other.fd = -1;
-                other.is_closed = true;
-            }
-            return *this;
-        }
-
-        void connectTo(const std::string& host, int port) { //客户端函数
-            struct hostent* he = gethostbyname(host.c_str());
-            if (he == nullptr) throw std::runtime_error("域名解析失败: " + host);
-            
-            struct sockaddr_in addr;
-            std::memset(&addr, 0, sizeof(addr));
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            addr.sin_addr = *(struct in_addr*)he->h_addr_list[0];
-
-            setBlocking(true); //客户端的::connect必须堵塞
-            if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-                throw std::runtime_error(std::string("连接服务器失败: ") + strerror(errno));
-            }
-            setBlocking(false);
-        }
-
-        void bindAndListen(int port, int backlog = 128) { //服务端函数
-            struct sockaddr_in addr;
-            std::memset(&addr, 0, sizeof(addr));
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            addr.sin_addr.s_addr = INADDR_ANY;
-
-            if (::bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
-                throw std::runtime_error("Bind 失败!");
-            if (::listen(fd, backlog) < 0)
-                throw std::runtime_error("Listen 失败!");
-        }
-
-        std::optional<TcpSocket> acceptClient() {
-            struct sockaddr_in client_addr;
-            socklen_t len = sizeof(client_addr);
-            int client_fd = ::accept(fd, (struct sockaddr*)&client_addr, &len);
-            
-            if (client_fd < 0) {
-                // 【常态 1】：非阻塞队列被抽干了，门外没客人了
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    return std::nullopt; // 返回一个优雅的“空盒子”
-                }
-                // 【常态 2】：幽灵 RST，客人连上又瞬间跑路了
-                if (errno == ECONNABORTED) {
-                    return std::nullopt;
-                }
-                // 【常态 3】：系统调用被底层的某些信号打断了
-                if (errno == EINTR) {
-                    return std::nullopt;
-                }
-
-                throw std::runtime_error(std::string("Accept 遭遇错误: ") + strerror(errno));
-            }
-            
-            return TcpSocket(client_fd); // 自动包装成 optional 成功态
-        }
-
-        bool write(const std::string& msg) {
-            if (fd < 0) return false;
-            ssize_t sent = ::send(fd, msg.c_str(), msg.length(), MSG_NOSIGNAL);
-            return sent == (ssize_t)msg.length();
-        }
-
-        std::string readUntil(const std::string& delimiter) {
-            while (true) {
-                size_t pos = in_buffer.find(delimiter);
-                if (pos != std::string::npos) {
-                    size_t extract_len = pos + delimiter.length();
-                    std::string result = in_buffer.substr(0, extract_len);
-                    in_buffer.erase(0, extract_len); 
-                    return result;
-                }
-                if (!recv_to_buffer()) return ""; 
-            }
-        }
-
-        std::string readExactly(size_t length) {
-            while (in_buffer.length() < length) {
-                if (!recv_to_buffer()) return ""; 
-            }
-            std::string result = in_buffer.substr(0, length);
-            in_buffer.erase(0, length);
-            return result;
-        }
-
-        void close() {
-            if (fd != -1) {
-                ::close(fd);
-                fd = -1;
-                in_buffer.clear();
-            }
-        }
-        
-        int getFd() const { return fd; }
-
-        bool isClosed() const { return is_closed; }
-
-        static size_t getBodyLength(const std::string& header) {
-            size_t pos = header.find("Content-Length:");
-            if (pos == std::string::npos) pos = header.find("content-length:");
-
-            if (pos != std::string::npos) {
-                pos += 15; 
-                size_t end_pos = header.find("\r\n", pos);
-                
-                if (end_pos != std::string::npos) {
-                    try {
-                        std::string num_str = header.substr(pos, end_pos - pos);
-                        return std::stoull(num_str);
-                    } catch (const std::exception&) {
-                        return 0;
-                    }
-                }
-            }
-            return 0; 
-        }
-
-        void setBlocking(bool blocking) { //设置::read(this->fd)时非堵塞
-            if (fd < 0 || is_closed) return;
-            int flags = fcntl(fd, F_GETFL, 0);
-            if (flags == -1) throw std::runtime_error("fcntl F_GETFL 失败");
-
-            if (!blocking) {
-                flags |= O_NONBLOCK;  
-            } else {
-                flags &= ~O_NONBLOCK; 
-            }
-
-            if (fcntl(fd, F_SETFL, flags) == -1) {
-                throw std::runtime_error("fcntl F_SETFL 失败");
-            }
-        }
-
-        void setHandleEvent(std::function<void(my::TcpSocket*)> _handle_event) {
-            handle_event = std::move(_handle_event);
-        };
-    };
-}
-
-#include <unordered_map>
-#include <sys/epoll.h>
-#include <unistd.h>
-#include "my_TcpSocket.hpp"
-
-namespace my {
-    class EPoller {
-    private:
-        int epfd;
-        // 用 unordered_map 替代 set，完美解决 O(1) 查找和可以修改元素的问题
-        // Key: fd, Value: TcpSocket 对象本身
-    public:
-        std::unordered_map<int, my::TcpSocket> m_sockets; 
-
-    public: 
-        EPoller() {
-            epfd = epoll_create1(0);
-        }
-
-        ~EPoller() {
-            if (epfd >= 0) close(epfd);
-        }
-
-        // ==========================================
-        // 核心接口：添加 Socket
-        // 无论是 Server 还是 Client，直接往里塞就行！
-        // ==========================================
-        void addSocket(my::TcpSocket&& sock) {
-            int fd = sock.getFd();
-            
-            // 挂载到 epoll 红黑树
-            struct epoll_event ev;
-            ev.events = EPOLLIN;
-            ev.data.fd = fd;
-            epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev);
-            
-            // 存入 map 中管理生命周期 (使用 std::move 转移所有权)
-            m_sockets.emplace(fd, std::move(sock));
-        }
-
-        // ==========================================
-        // 核心接口：移除 Socket
-        // ==========================================
-        void removeSocket(int fd) {
-            // 当 map.erase 被调用时，TcpSocket 触发析构，调用 close(fd)。
-            // Linux 极其智能，底层 fd 关闭时，会自动从 epoll 的红黑树上剔除，无需 epoll_ctl DEL！
-            m_sockets.erase(fd); 
-        }
-
-        // ==========================================
-        // 极其干净的 poll：只传时间，没有任何业务回调！
-        // ==========================================
-        void poll(int timeout_ms) {
-            const int MAX_EVENTS = 1024;
-            struct epoll_event events[MAX_EVENTS];
-
-            int n = epoll_wait(epfd, events, MAX_EVENTS, timeout_ms);
-
-            for (int i = 0; i < n; ++i) {
-                int fd = events[i].data.fd;
-                m_sockets[fd].handle_event(&m_sockets[fd]);
-            }
-        }
-    };
-}
-
+root@iZj6cge9ov8xiaqovtw578Z:~/tmp# g++ b.cpp -o b.out && ./b.out
+started listening
+5 enter
+current player: 1
+5 exit
+Segmentation fault (core dumped)
 #include <vector>
 #include <array>
 #include <random>
@@ -406,19 +110,26 @@ int main() {
         if (!opt_client) return;
         my::TcpSocket client = std::move(*opt_client);
         client.setHandleEvent([&](my::TcpSocket* cli) -> void {
-            std::string c = cli->readExactly(1);
-            if (!gameover) {
-                if (c == "U") try_rotate(), std::cout << cli->getFd() << " pressed U" << std::endl;
-                if (c == "L") try_move(0, -1), std::cout << cli->getFd() << " pressed L" << std::endl;
-                if (c == "R") try_move(0, 1), std::cout << cli->getFd() << " pressed R" << std::endl;
-                if (c == "D") try_move(-1, 0), std::cout << cli->getFd() << " pressed D" << std::endl;
-            } else {
-                if (c == "E") initgame(), std::cout << cli->getFd() << " pressed E" << std::endl;
-            }
-            if (c == "") {
-                std::cout << cli->getFd() << " exit" << std::endl;
-                poller.removeSocket(cli->getFd());
-                std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
+            while (true) { // 防粘包
+                std::optional<std::string> opt_c = cli->readExactly(1);
+                if (!opt_c) {
+                    std::cout << cli->getFd() << " exit" << std::endl;
+                    poller.removeSocket(cli->getFd());
+                    std::cout << "current player: " << poller.m_sockets.size() - 1 << std::endl;
+                    break;
+                } else if (opt_c->empty()) {
+                    break;
+                } else {
+                    std::string c = std::move(*opt_c);
+                    if (!gameover) {
+                        if (c == "U") try_rotate(), std::cout << cli->getFd() << " pressed U" << std::endl;
+                        if (c == "L") try_move(0, -1), std::cout << cli->getFd() << " pressed L" << std::endl;
+                        if (c == "R") try_move(0, 1), std::cout << cli->getFd() << " pressed R" << std::endl;
+                        if (c == "D") try_move(-1, 0), std::cout << cli->getFd() << " pressed D" << std::endl;
+                    } else {
+                        if (c == "E") initgame(), std::cout << cli->getFd() << " pressed E" << std::endl;
+                    }
+                }
             }
         });
         std::cout << client.getFd() << " enter" << std::endl;
@@ -464,165 +175,262 @@ int main() {
 
     return 0;
 }
-#include <raylib.h>
-#include <vector>
-#include <array>
-#include <random>
-#include <algorithm>
 #include <iostream>
+#include <string>
+#include <cstring>
+#include <stdexcept>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <cerrno>
+#include <optional>
+#include <functional>
+#include <netinet/tcp.h>
 
-#include "my_TcpSocket.hpp"
+// size_t: 3
+// fd_kernel_buffer: {'U', 'R', EOF} 
+
+namespace my {
+    class TcpSocket { 
+    private:
+        int fd;
+        std::string in_buffer;
+        bool is_closed = false;
+
+        explicit TcpSocket(int client_fd) : fd(client_fd) {
+            int opt = 1;
+            setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)); //tcp包不打成大包发出
+            setBlocking(false); //默认非堵塞防半包时readExactly堵很久
+        }
+
+        bool recv_to_buffer() {
+            if (fd < 0 || is_closed) return false;
+            char tmp_buf[4096];
+            int bytes_read = ::read(fd, tmp_buf, sizeof(tmp_buf));
+            
+            if (bytes_read > 0) {
+                // 【情况1：健康】成功拿到数据
+                in_buffer.append(tmp_buf, bytes_read);
+                return true;
+            } else if (bytes_read == 0) {
+                // 【情况2：和平分手】收到对端的 FIN 包 (EOF)
+                is_closed = true;
+                return false;
+            } else /*if (bytes_read < 0)*/ {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // **【情况3：暂无数据】这是非阻塞才有的正常现象，连接没死！**
+                    return false; 
+                }
+                // 【情况4：意外暴毙】比如收到 RST 重置包
+                is_closed = true;
+                return false;
+            }
+        }
+
+        void close() {
+            if (fd != -1) {
+                ::close(fd);
+                fd = -1;
+                in_buffer.clear();
+            }
+        }
+
+    public:
+        std::function<void(my::TcpSocket*)> handle_event;
+
+    public:
+        TcpSocket() {
+            fd = socket(AF_INET, SOCK_STREAM, 0);
+            if (fd < 0) throw std::runtime_error("Socket 创建失败!");
+            
+            int opt = 1;
+            setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)); //(待填坑tcp挥手)
+            setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)); //tcp包不打成大包发出
+
+            setBlocking(false); //默认非堵塞防半包时readExactly堵很久(作为接客fd时也要让accept非堵塞防RST)
+        }
+
+        ~TcpSocket() { close(); }
+
+        TcpSocket(const TcpSocket&) = delete;
+        TcpSocket& operator=(const TcpSocket&) = delete;
+        
+        // 1. 补全移动构造函数
+        TcpSocket(TcpSocket&& other) noexcept : 
+            fd(other.fd), 
+            in_buffer(std::move(other.in_buffer)),
+            handle_event(std::move(other.handle_event)),
+            is_closed(other.is_closed)
+        {
+            other.fd = -1;
+            other.is_closed = true;
+        }
+
+        // 2. 补全移动赋值运算符
+        TcpSocket& operator=(TcpSocket&& other) noexcept {
+            if (this != &other) {
+                close();
+                fd = other.fd;
+                in_buffer = std::move(other.in_buffer);
+                handle_event = std::move(other.handle_event);
+                is_closed = other.is_closed;
+                other.fd = -1;
+                other.is_closed = true;
+            }
+            return *this;
+        }
+
+        void connectTo(const std::string& host, int port) { //客户端函数
+            struct hostent* he = gethostbyname(host.c_str());
+            if (he == nullptr) throw std::runtime_error("域名解析失败: " + host);
+            
+            struct sockaddr_in addr;
+            std::memset(&addr, 0, sizeof(addr));
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(port);
+            addr.sin_addr = *(struct in_addr*)he->h_addr_list[0];
+
+            int flags = fcntl(fd, F_GETFL, 0);
+            if (flags == -1) throw std::runtime_error("fcntl 获取状态失败");
+            bool is_originally_blocking = (flags & O_NONBLOCK) == 0;
+
+            setBlocking(true); 
+            
+            int connect_err = 0;
+            if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+                connect_err = errno;
+            }
+
+            setBlocking(is_originally_blocking);
+
+            if (connect_err != 0) {
+                throw std::runtime_error(std::string("连接服务器失败: ") + strerror(connect_err));
+            }
+        }
+
+        void bindAndListen(int port, int backlog = 128) { //服务端函数
+            struct sockaddr_in addr;
+            std::memset(&addr, 0, sizeof(addr));
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(port);
+            addr.sin_addr.s_addr = INADDR_ANY;
+
+            if (::bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
+                throw std::runtime_error("Bind 失败!");
+            if (::listen(fd, backlog) < 0)
+                throw std::runtime_error("Listen 失败!");
+        }
 
 
-int main() {
-    constexpr int win_w = 1200, win_h = 900;
-    InitWindow(win_w, win_h, "C++ Raylib game");
-    SetTargetFPS(60);
-    
-    constexpr int time_interval = 20, H = 16, W = 10;
-    std::vector<std::vector<int>> g(H, std::vector<int>(W, 0));
-    std::vector<std::array<std::pair<int, int>, 4>> blocks = {
-        {{{0, 0}, {1, 0}, {-1, 0}, {-2, 0}}}, //I
-        {{{0, 0}, {1, 0}, {0, 1}, {0, -1}}}, //T
-        {{{0, 0}, {1, 0}, {0, 1}, {1, 1}}}, //O
-        {{{0, 0}, {0, 1}, {1, 0}, {1, -1}}}, //Z
-        {{{0, 0}, {0, -1}, {1, 0}, {1, 1}}}, //rZ
-        {{{0, 0}, {1, 0}, {-1, 0}, {-1, 1}}}, //L
-        {{{0, 0}, {1, 0}, {-1, 0}, {-1, -1}}}, //rL
-    };
+        //std::nullopt: 非堵塞读取,暂无数据
+        //std::optional<TcpSocket{}>：读到数据
+        std::optional<TcpSocket> acceptClient() {
+            struct sockaddr_in client_addr;
+            socklen_t len = sizeof(client_addr);
+            int client_fd = ::accept(fd, (struct sockaddr*)&client_addr, &len); //先EPoller提示响了(或主动摸)，再::accept()尝试去非堵塞读
+            
+            if (client_fd < 0) {
+                // 【常态 1】：非阻塞队列被抽干了，门外没客人了
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    return std::nullopt; // 返回一个优雅的“空盒子”
+                }
+                // 【常态 2】：幽灵 RST，客人连上又瞬间跑路了
+                if (errno == ECONNABORTED) {
+                    return std::nullopt;
+                }
+                // 【常态 3】：系统调用被底层的某些信号打断了
+                if (errno == EINTR) {
+                    return std::nullopt;
+                }
 
-    int current_block = 0, next_block = 1;
-    int cord_x = H - 2, cord_y = W / 2, state = 0; // % 4
-    int time_cnt = 0, score = 0;
-    int gameover = 1;
+                throw std::runtime_error(std::string("Accept 遭遇错误: ") + strerror(errno));
+            }
+            
+            return TcpSocket(client_fd); // 自动包装成 optional 成功态
+        }
 
-    auto render = [&]() -> void {
-        // ==================================================
-        // render (纯正笛卡尔坐标系: x行 y列，原点左下角)
-        // ==================================================
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
+        bool write(const std::string& msg) {
+            if (fd < 0) return false;
+            ssize_t sent = ::send(fd, msg.c_str(), msg.length(), MSG_NOSIGNAL);
+            return sent == (ssize_t)msg.length();
+        }
 
-        // 动态计算渲染尺寸，让画面在 1200x900 的大窗口里完美居中
-        const int CELL_SIZE = 50; // 格子放大到 50 像素，视觉效果极佳
-        // 注意：你传给 InitWindow 的第一个参数是 win_w(1200)，所以它是宽
-        const int OFFSET_X = (win_w - W * CELL_SIZE) / 2; 
-        const int OFFSET_Y = (win_h - H * CELL_SIZE) / 2; 
+        //std::nullopt: 关闭连接
+        //std::optional<"">：非堵塞读取,暂无数据
+        //std::optional<"LRU">：读到数据
+        std::optional<std::string> readExactly(size_t length) {
+            while (in_buffer.length() < length) {
+                if (!recv_to_buffer()) {
+                    if (is_closed) return std::nullopt;
+                    else return ""; 
+                }
+            }
+            std::string result = in_buffer.substr(0, length);
+            in_buffer.erase(0, length);
+            return result;
+        }
 
-        // 1. 画游戏区域底板和边框
-        DrawRectangle(OFFSET_X, OFFSET_Y, W * CELL_SIZE, H * CELL_SIZE, LIGHTGRAY);
-        // 加粗外围边框
-        DrawRectangleLines(OFFSET_X - 2, OFFSET_Y - 2, W * CELL_SIZE + 4, H * CELL_SIZE + 4, BLACK); 
-
-        // 2. 画已经固定的方块 (g 数组)
-        for (int i = 0; i < H; ++i) {     // i 是行 (0为最底下)
-            for (int j = 0; j < W; ++j) { // j 是列 (0为最左边)
-                if (g[i][j] != 0) {
-                    int render_x = OFFSET_X + j * CELL_SIZE;
-                    // 【核心翻转映射】：屏幕Y = 偏移 + (总高 H - 1 - 当前行 i) * 尺寸
-                    int render_y = OFFSET_Y + (H - 1 - i) * CELL_SIZE; 
-                    // CELL_SIZE - 2 留下 2 像素的空隙，质感拉满
-                    DrawRectangle(render_x, render_y, CELL_SIZE - 2, CELL_SIZE - 2, GRAY);
+        std::optional<std::string> readUntil(const std::string& delimiter) {
+            while (true) {
+                size_t pos = in_buffer.find(delimiter);
+                if (pos != std::string::npos) {
+                    size_t extract_len = pos + delimiter.length();
+                    std::string result = in_buffer.substr(0, extract_len);
+                    in_buffer.erase(0, extract_len); 
+                    return result;
+                }
+                if (!recv_to_buffer()) {
+                    if (is_closed) return std::nullopt;
+                    else return ""; 
                 }
             }
         }
 
-        // 3. 画当前正在下落的方块
-        if (!gameover) {
-            for (auto [x, y] : blocks[current_block]) {
-                int cx = x, cy = y;
+        int getFd() const { return fd; }
 
-                 auto rotate = [&](int& x, int& y, int sta) -> void {
-                    while (sta--) std::tie(x, y) = std::tuple(-y, x);
-                };
+        bool isClosed() const { return is_closed; }
 
-                rotate(cx, cy, state);
-                cx += cord_x; 
-                cy += cord_y;
+        void setBlocking(bool blocking) { //设置::read(this->fd)时非堵塞
+            if (fd < 0 || is_closed) return;
+            int flags = fcntl(fd, F_GETFL, 0);
+            if (flags == -1) throw std::runtime_error("fcntl F_GETFL 失败");
 
-                if (cx >= 0 && cx < H && cy >= 0 && cy < W) {
-                    int render_x = OFFSET_X + cy * CELL_SIZE;
-                    int render_y = OFFSET_Y + (H - 1 - cx) * CELL_SIZE;
-                    DrawRectangle(render_x, render_y, CELL_SIZE - 2, CELL_SIZE - 2, DARKBLUE);
-                }
+            if (!blocking) {
+                flags |= O_NONBLOCK;  
+            } else {
+                flags &= ~O_NONBLOCK; 
+            }
+
+            if (fcntl(fd, F_SETFL, flags) == -1) {
+                throw std::runtime_error("fcntl F_SETFL 失败");
             }
         }
 
-        // 4. 画右侧的下一个方块预览区
-        int preview_x = OFFSET_X + W * CELL_SIZE + 50;
-        int preview_y = OFFSET_Y + 50;
-        DrawText("NEXT:", preview_x, preview_y, 30, DARKGRAY);
-        
-        for (auto [x, y] : blocks[next_block]) {
-            // y控制左右，x控制上下(这里也按左下角法则渲染)
-            int render_x = preview_x + (y + 2) * CELL_SIZE;
-            int render_y = preview_y + 80 + (2 - x) * CELL_SIZE; 
-            DrawRectangle(render_x, render_y, CELL_SIZE - 2, CELL_SIZE - 2, SKYBLUE);
+        void setHandleEvent(std::function<void(my::TcpSocket*)> _handle_event) {
+            handle_event = std::move(_handle_event);
+        };
+
+        static size_t getBodyLength(const std::string& header) {
+            size_t pos = header.find("Content-Length:");
+            if (pos == std::string::npos) pos = header.find("content-length:");
+
+            if (pos != std::string::npos) {
+                pos += 15; 
+                size_t end_pos = header.find("\r\n", pos);
+                
+                if (end_pos != std::string::npos) {
+                    try {
+                        std::string num_str = header.substr(pos, end_pos - pos);
+                        return std::stoull(num_str);
+                    } catch (const std::exception&) {
+                        return 0;
+                    }
+                }
+            }
+            return 0; 
         }
-
-        // 5. 计分板和状态 UI
-        DrawText(TextFormat("SCORE: %d", score), 50, OFFSET_Y, 40, DARKGRAY);
-
-        if (gameover) {
-            // 盖一层全屏的半透明黑色遮罩，高级感直接拉满
-            DrawRectangle(0, 0, win_w, win_h, Fade(BLACK, 0.6f));
-            
-            // MeasureText 会自动计算字符串在特定字号下的宽度，保证居中极其完美
-            const char* go_text = "GAME OVER!";
-            const char* re_text = "Press [ENTER] to Restart";
-            DrawText(go_text, win_w / 2 - MeasureText(go_text, 80) / 2, win_h / 2 - 60, 80, RED);
-            DrawText(re_text, win_w / 2 - MeasureText(re_text, 30) / 2, win_h / 2 + 40, 30, LIGHTGRAY);
-        }
-
-        EndDrawing();
     };
-
-    my::TcpSocket client;
-    client.connectTo("47.238.99.207", 8080);
-    std::cout << "connected" << std::endl;
-
-    struct p_class {
-        int g[16][10];
-        int cord_x, cord_y, state;
-        int current_block, next_block;
-        int score;
-        int gameover;
-        int time_cnt;
-    };
-
-    int cnt = 0;
-    while (!WindowShouldClose()) {
-        if (IsKeyPressed(KEY_UP))    client.write("U");
-        if (IsKeyPressed(KEY_LEFT))  client.write("L");
-        if (IsKeyPressed(KEY_RIGHT)) client.write("R");
-        if (IsKeyPressed(KEY_DOWN))  client.write("D");
-        if (IsKeyPressed(KEY_ENTER)) client.write("E");
-
-        std::string data;
-        while (true) {
-            std::string current_data = client.readExactly(sizeof(p_class)); // 非堵塞读取·
-            if (current_data.empty()) break; // 抽干了，跳出
-            data = std::move(current_data); // 永远覆盖，只留最新的
-        }
-        
-        if (!data.empty()) { //延迟返回空串时防memcpy报错
-            p_class p;
-            std::memcpy(&p, data.data(), sizeof(p_class));
-            
-            for (int i = 0; i < H; ++i) for (int j = 0; j < W; ++j) g[i][j] = p.g[i][j];
-            cord_x = p.cord_x; 
-            cord_y = p.cord_y; 
-            state = p.state;
-            current_block = p.current_block; 
-            next_block = p.next_block;
-            score = p.score; 
-            gameover = p.gameover;
-            time_cnt = p.time_cnt;
-        }
-        
-        render();
-    }
-
-    CloseWindow();
-    return 0;
 }

@@ -107,9 +107,11 @@ namespace my {
             addr.sin_port = htons(port);
             addr.sin_addr = *(struct in_addr*)he->h_addr_list[0];
 
+            setBlocking(true); //客户端的::connect必须堵塞
             if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-                throw std::runtime_error("连接服务器失败!");
+                throw std::runtime_error(std::string("连接服务器失败: ") + strerror(errno));
             }
+            setBlocking(false);
         }
 
         void bindAndListen(int port, int backlog = 128) { //服务端函数

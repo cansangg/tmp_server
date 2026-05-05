@@ -138,6 +138,7 @@ int main() {
             if (opt_current_data == std::nullopt || opt_current_data->empty()) break; // 抽干了，跳出
             data = std::move(*opt_current_data); // 永远覆盖，只留最新的
         }
+        if (client.isClosed()) break; //服务端关闭连接
         
         if (!data.empty()) { //延迟返回空串时防memcpy报错
             p_class p;

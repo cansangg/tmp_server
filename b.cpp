@@ -170,13 +170,3 @@ int main() {
 
     return 0;
 }
-
-{
-    std::function<void() fn;
-    {
-        fn = [&]() -> void {
-            std::cout << "666\n";
-        }
-    }
-    fn();
-}

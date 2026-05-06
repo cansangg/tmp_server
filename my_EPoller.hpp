@@ -21,15 +21,40 @@ namespace my {
             if (epfd >= 0) close(epfd);
         }
 
-        void addSocket(my::TcpSocket&& sock) {
-            int fd = sock.getFd();
+        void addSocket(my::TcpSocket&& client) {
+            int fd = client.getFd();
+
+            //client->write()和poller->poll()里调用handle_write
+            client.setHandleWrite([this](my::TcpSocket* cli) -> void {
+                int fd = cli->getFd();
+                ssize_t ok = cli->send_to_kernel();
+                if (ok != 1) { 
+                    if (!cli->write_waiting) {
+                        cli->write_waiting = true;
+                        struct epoll_event ev;
+                        ev.events = EPOLLIN | EPOLLOUT; //加入写监听,若连接断开无影响,EPOLLIN会响并懒删除
+                        ev.data.fd = fd;
+                        epoll_ctl(this->epfd, EPOLL_CTL_MOD, fd, &ev);
+                    }
+                }
+
+                if (ok == 1) {
+                    if (cli->write_waiting) {
+                        cli->write_waiting = false;
+                        struct epoll_event ev;
+                        ev.events = EPOLLIN; //取消写监听
+                        ev.data.fd = fd;
+                        epoll_ctl(this->epfd, EPOLL_CTL_MOD, fd, &ev);
+                    }
+                }
+            });
             
             struct epoll_event ev;
-            ev.events = EPOLLIN;
+            ev.events = EPOLLIN; //EPOLLIN
             ev.data.fd = fd;
             epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev);
             
-            m_sockets.emplace(fd, std::move(sock));
+            m_sockets.emplace(fd, std::move(client));
         }
 
         void removeSocketLazy(int fd) { //懒删除
@@ -44,12 +69,13 @@ namespace my {
 
             for (int i = 0; i < n; ++i) {
                 int fd = events[i].data.fd;
-                m_sockets[fd].handle_event(&m_sockets[fd]); //TcpSocket响了自己回调处理
+                uint32_t ev = events[i].events;
+                if (ev & EPOLLOUT) m_sockets[fd].handle_write(&m_sockets[fd]); //内核写缓冲区有空位了，继续写
+                if (ev & EPOLLIN) m_sockets[fd].handle_event(&m_sockets[fd]); //TcpSocket响了自己在回调函数里读并处理
             }
 
             for (int fd : to_remove) {
-                // 当 map.erase 被调用时，TcpSocket 触发析构，调用 close(fd)。
-                // Linux底层 fd 关闭时，会自动从 epoll 的红黑树上剔除，无需 epoll_ctl DEL！
+                epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
                 m_sockets.erase(fd); 
             }
             to_remove.clear();

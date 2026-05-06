@@ -125,22 +125,26 @@ int main() {
     };
 
     int cnt = 0;
-    while (!WindowShouldClose()) {
+    while (!WindowShouldClose()) { //该while循环就是一台轮询机？^_^
         if (IsKeyPressed(KEY_UP))    client.write("U"), std::cout << "pressed U\n";
         if (IsKeyPressed(KEY_LEFT))  client.write("L"), std::cout << "pressed L\n";
         if (IsKeyPressed(KEY_RIGHT)) client.write("R"), std::cout << "pressed R\n";
         if (IsKeyPressed(KEY_DOWN))  client.write("D"), std::cout << "pressed D\n";
         if (IsKeyPressed(KEY_ENTER)) client.write("E"), std::cout << "pressed E\n";
+        //就像不断询问读缓冲区有没有数据并读取一样，也要不断询问写缓冲区有没有空位并接着写入
+        client.send_to_kernel();
 
         std::string data;
-        while (true) {
+        bool server_closed = false;
+        while (true) { //粘包一定存在，需用户层处理
             std::optional<std::string> opt_current_data = client.readExactly(sizeof(p_class)); // 非堵塞读取
-            if (!opt_current_data || opt_current_data->empty()) break; // 抽干了，跳出
-            data = std::move(*opt_current_data); // 永远覆盖，只留最新的
+            if (!opt_current_data) break;
+            else if (opt_current_data->empty()) { server_closed = true; break; }
+            data = std::move(*opt_current_data);
         }
-        if (client.isClosed()) break; //服务端关闭连接
+        if (server_closed) break; 
         
-        if (!data.empty()) { //延迟返回空串时防memcpy报错
+        if (!data.empty()) { //暂无数据时防memcpy报错
             p_class p;
             std::memcpy(&p, data.data(), sizeof(p_class));
             

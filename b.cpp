@@ -104,11 +104,10 @@ int main() {
         if (!opt_client) return;
         my::TcpSocket client = std::move(*opt_client);
         client.setHandleEvent([&](my::TcpSocket* cli) -> void {
-            while (true) { // 防粘包
+            while (true) { //粘包一定存在，需用户层处理
                 std::optional<std::string> opt_c = cli->readExactly(1);
                 if (!opt_c) {
                     std::cout << cli->getFd() << " exit" << std::endl;
-                    // poller.removeSocketImmediate(cli->getFd()); 妙
                     poller.removeSocketLazy(cli->getFd());
                     std::cout << "current player: " << poller.m_sockets.size() - 1 - poller.to_remove.size() << std::endl;
                     break;
@@ -129,7 +128,7 @@ int main() {
         });
         std::cout << client.getFd() << " enter" << std::endl;
         poller.addSocket(std::move(client));
-        std::cout << "current player: " << poller.m_sockets.size() - 1 - - poller.to_remove.size()<< std::endl;
+        std::cout << "current player: " << poller.m_sockets.size() - 1 - poller.to_remove.size()<< std::endl;
     });
     poller.addSocket(std::move(server));
 

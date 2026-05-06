@@ -107,11 +107,11 @@ int main() {
             while (true) { //粘包一定存在，需用户层处理
                 std::optional<std::string> opt_c = cli->readExactly(1);
                 if (!opt_c) {
+                    break;
+                } else if (opt_c->empty()) {
                     std::cout << cli->getFd() << " exit" << std::endl;
                     poller.removeSocketLazy(cli->getFd());
                     std::cout << "current player: " << poller.m_sockets.size() - 1 - poller.to_remove.size() << std::endl;
-                    break;
-                } else if (opt_c->empty()) {
                     break;
                 } else {
                     std::string c = std::move(*opt_c);

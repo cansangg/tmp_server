@@ -17,48 +17,37 @@ namespace my {
             epfd = epoll_create1(0);
         }
 
+        EPoller(const EPoller&) = delete;
+        EPoller& operator=(const EPoller&) = delete;
+        EPoller(EPoller&&) = delete;
+        EPoller& operator=(EPoller&&) = delete;
         ~EPoller() {
             if (epfd >= 0) close(epfd);
         }
 
         void addSocket(my::TcpSocket&& client) {
             int fd = client.getFd();
-
-            //client->write()和poller->poll()里调用handle_write
-            client.setHandleWrite([this](my::TcpSocket* cli) -> void {
-                int fd = cli->getFd();
-                ssize_t ok = cli->send_to_kernel();
-                if (ok != 1) { 
-                    if (!cli->write_waiting) {
-                        cli->write_waiting = true;
-                        struct epoll_event ev;
-                        ev.events = EPOLLIN | EPOLLOUT; //加入写监听,若连接断开无影响,EPOLLIN会响并懒删除
-                        ev.data.fd = fd;
-                        epoll_ctl(this->epfd, EPOLL_CTL_MOD, fd, &ev);
-                    }
-                }
-
-                if (ok == 1) {
-                    if (cli->write_waiting) {
-                        cli->write_waiting = false;
-                        struct epoll_event ev;
-                        ev.events = EPOLLIN; //取消写监听
-                        ev.data.fd = fd;
-                        epoll_ctl(this->epfd, EPOLL_CTL_MOD, fd, &ev);
-                    }
-                }
-            });
             
             struct epoll_event ev;
-            ev.events = EPOLLIN; //EPOLLIN
+            ev.events = EPOLLIN; //默认EPOLLIN
             ev.data.fd = fd;
             epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev);
-            
+
             m_sockets.emplace(fd, std::move(client));
         }
 
         void removeSocketLazy(int fd) { //懒删除
             to_remove.push_back(fd);
+        }
+
+        void modifySocket(int fd, uint32_t events) {
+            if (fd < 0) return;
+
+            struct epoll_event ev;
+            ev.data.fd = fd;
+            ev.events = events;
+
+            epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &ev);
         }
 
         void poll(int timeout_ms) {
@@ -71,7 +60,7 @@ namespace my {
                 int fd = events[i].data.fd;
                 uint32_t ev = events[i].events;
                 if (ev & EPOLLOUT) m_sockets[fd].handle_write(&m_sockets[fd]); //内核写缓冲区有空位了，继续写
-                if (ev & EPOLLIN) m_sockets[fd].handle_event(&m_sockets[fd]); //TcpSocket响了自己在回调函数里读并处理
+                if (ev & EPOLLIN) m_sockets[fd].handle_read(&m_sockets[fd]); //TcpSocket响了自己在回调函数里读并处理
             }
 
             for (int fd : to_remove) {
@@ -81,4 +70,30 @@ namespace my {
             to_remove.clear();
         }
     };
+}
+
+std::function {
+    T lambda;
+    operator () {
+        if (lambda) lambda();
+    }
+};
+
+Poller {
+    vector<std::function> v;
+}
+
+int main() {
+    Poller poller;
+    {
+        class Lambda {
+            Poller* p = &poller;
+            void operator() {
+                p->v.clear();
+                std::cout << p->v.size() << '\n';
+            }
+        } lambda;
+        poller.v.push_back(lambda);
+    }
+    
 }

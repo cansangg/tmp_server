@@ -99,33 +99,62 @@ int main() {
 
     my::TcpSocket server;
     server.bindAndListen(8080);
-    server.setHandleEvent([&](my::TcpSocket* ser) -> void {
+    server.setHandleRead([&](my::TcpSocket* ser) -> void {
         std::optional<my::TcpSocket> opt_client = ser->acceptClient();
         if (!opt_client) return;
         my::TcpSocket client = std::move(*opt_client);
-        client.setHandleEvent([&](my::TcpSocket* cli) -> void {
+
+        //client->write()和poller->poll()里调用handle_write
+        client.setHandleWrite([&](my::TcpSocket* cli) -> void {
+            int fd = cli->getFd();
+            ssize_t ok = cli->send_to_kernel();
+
+            if (ok == -1) { //连接异常断开
+                to_remove.push_back(fd);
+            }
+
+            if (ok == 0) { 
+                if (!cli->write_waiting) {
+                    cli->write_waiting = true;
+                    poller.modifySocket(fd, EPOLLIN | EPOLLOUT); //加入写监听
+                }
+            }
+
+            if (ok == 1) {
+                if (cli->write_waiting) {
+                    cli->write_waiting = false;
+                    poller.modifySocket(fd, EPOLLIN); //取消写监听
+                }
+            }
+        });
+
+        //poller->poll()里调用handle_read
+        client.setHandleRead([&](my::TcpSocket* cli) -> void {
+            int fd = cli->getFd();
+
             while (true) { //粘包一定存在，需用户层处理
                 std::optional<std::string> opt_c = cli->readExactly(1);
-                if (!opt_c) {
+                if (!opt_c) { //半包
                     break;
                 } else if (opt_c->empty()) {
-                    std::cout << cli->getFd() << " exit" << std::endl;
-                    poller.removeSocketLazy(cli->getFd());
+                    poller.removeSocketLazy(fd);
+                    std::cout << fd << " exit" << std::endl;
                     std::cout << "current player: " << poller.m_sockets.size() - 1 - poller.to_remove.size() << std::endl;
                     break;
                 } else {
                     std::string c = std::move(*opt_c);
                     if (!gameover) {
-                        if (c == "U") try_rotate(), std::cout << cli->getFd() << " pressed U" << std::endl;
-                        if (c == "L") try_move(0, -1), std::cout << cli->getFd() << " pressed L" << std::endl;
-                        if (c == "R") try_move(0, 1), std::cout << cli->getFd() << " pressed R" << std::endl;
-                        if (c == "D") try_move(-1, 0), std::cout << cli->getFd() << " pressed D" << std::endl;
+                        if (c == "U") try_rotate(), std::cout << fd << " pressed U" << std::endl;
+                        if (c == "L") try_move(0, -1), std::cout << fd << " pressed L" << std::endl;
+                        if (c == "R") try_move(0, 1), std::cout << fd << " pressed R" << std::endl;
+                        if (c == "D") try_move(-1, 0), std::cout << fd << " pressed D" << std::endl;
                     } else {
-                        if (c == "E") initgame(), std::cout << cli->getFd() << " pressed E" << std::endl;
+                        if (c == "E") initgame(), std::cout << fd << " pressed E" << std::endl;
                     }
                 }
             }
         });
+
         std::cout << client.getFd() << " enter" << std::endl;
         poller.addSocket(std::move(client));
         std::cout << "current player: " << poller.m_sockets.size() - 1 - poller.to_remove.size()<< std::endl;

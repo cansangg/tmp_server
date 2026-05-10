@@ -132,7 +132,7 @@ int main() {
         if (IsKeyPressed(KEY_DOWN))  client.write("D"), std::cout << "pressed D\n";
         if (IsKeyPressed(KEY_ENTER)) client.write("E"), std::cout << "pressed E\n";
         //就像不断询问读缓冲区有没有数据并读取一样，也要不断询问写缓冲区有没有空位并接着写入
-        std::cout << client.send_to_kernel() << '\n';
+        client.send_to_kernel();
 
         std::string data;
         bool server_closed = false;

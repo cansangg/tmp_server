@@ -28,7 +28,7 @@ namespace my {
             }
         }
 
-        void wait(T target) {
+        void wait_until(T target) {
             while (true) {
                 T pre = v;
                 if (pre == target) break;
@@ -44,7 +44,7 @@ namespace my {
             syscall(SYS_futex, (int*)&v, FUTEX_WAKE, num, nullptr, nullptr, 0);
         }
 
-        void store(T new_value) { v = new_value; } //参数为编译器常量时为原子操作
+        void store(T new_value) { v = new_value; } //参数为编译时常量时为原子操作
 
         T load() const { return v; }
     };
@@ -61,7 +61,7 @@ namespace my {
             int cnt = 0;
             while (++cnt <= 100) if (ato.load() == 0 && ato.compare_exchange(0, 1)) return;
             while (true) {
-                ato.wait(0);
+                ato.wait_until(0);
                 if (ato.compare_exchange(0, 1)) break;
             }
         }

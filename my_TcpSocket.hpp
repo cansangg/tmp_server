@@ -18,7 +18,7 @@
 
 /*核心接口：
     堵塞式: connectTo()
-    非堵塞式: bindAndListen(), setBlocking(), setHandleEvent(), setHandleWrite(), getFd(),
+    非堵塞式: bindAndListen(), setBlocking(), setHandleRead(), setHandleWrite(), getFd(),
         两态acceptClient()，三态readExactly()/readUntil()
 */
 
@@ -45,7 +45,7 @@ namespace my {
                 return bytes_read; //读到数据
             } else if (bytes_read == 0) {
                 return 0; // 正常EOF
-            } else {
+            } else if (bytes_read < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     return -1; // 暂无数据
                 }
@@ -65,7 +65,7 @@ namespace my {
 
     public:
         bool write_waiting = false; //避免频繁系统调用
-        std::function<void(my::TcpSocket*)> handle_event;
+        std::function<void(my::TcpSocket*)> handle_read;
         std::function<void(my::TcpSocket*)> handle_write;
 
     public:
@@ -91,7 +91,7 @@ namespace my {
             write_waiting(other.write_waiting),
             in_buffer(std::move(other.in_buffer)),
             out_buffer(std::move(other.out_buffer)),
-            handle_event(std::move(other.handle_event)),
+            handle_read(std::move(other.handle_read)),
             handle_write(std::move(other.handle_write))
         {
             other.fd = -1;
@@ -105,7 +105,7 @@ namespace my {
                 write_waiting = other.write_waiting;
                 in_buffer = std::move(other.in_buffer);
                 out_buffer = std::move(other.out_buffer);
-                handle_event = std::move(other.handle_event);
+                handle_read = std::move(other.handle_read);
                 handle_write = std::move(other.handle_write);
                 other.fd = -1;
             }
@@ -220,11 +220,11 @@ namespace my {
             if (sent > 0) { //发了一部分
                 out_buffer.erase(0, sent);
                 return out_buffer.empty();
-            } else /*if (sent < 0)*/ {
+            } else if (sent < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     return 0; //只是内核满了
                 }
-                return -1; // 遭遇RST, poller响后在client->handle_event()里处理断开连接
+                return -1; // 遭遇RST, poller响后在client->handle_read()里处理断开连接
             }
         }
 
@@ -246,8 +246,8 @@ namespace my {
             }
         }
 
-        void setHandleEvent(std::function<void(my::TcpSocket*)> _handle_event) {
-            handle_event = std::move(_handle_event);
+        void setHandleRead(std::function<void(my::TcpSocket*)> _handle_read) {
+            handle_read = std::move(_handle_read);
         };
 
         void setHandleWrite(std::function<void(my::TcpSocket*)> _handle_write) {

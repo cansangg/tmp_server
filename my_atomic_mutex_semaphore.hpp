@@ -55,7 +55,7 @@ namespace my {
         atomic<int> ato;
 
     public:
-        mutex(int capacity = 1) : ato(capacity != 0) {}
+        mutex(int capacity = 1) : ato(capacity > 0) {}
 
         void lock() {
             int cnt = 0;

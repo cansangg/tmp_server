@@ -71,29 +71,3 @@ namespace my {
         }
     };
 }
-
-std::function {
-    T lambda;
-    operator () {
-        if (lambda) lambda();
-    }
-};
-
-Poller {
-    vector<std::function> v;
-}
-
-int main() {
-    Poller poller;
-    {
-        class Lambda {
-            Poller* p = &poller;
-            void operator() {
-                p->v.clear();
-                std::cout << p->v.size() << '\n';
-            }
-        } lambda;
-        poller.v.push_back(lambda);
-    }
-    
-}

@@ -10,7 +10,7 @@ namespace my {
         volatile T v; 
 
     public:
-        static_assert(sizeof(T) == 4, "Futex syscall MUST strictly operate on 32-bit integers (4 bytes)!");
+        static_assert(sizeof(T) == 4, "Futex syscall MUST strictly operate on 32-bit integers (4 bytes)! Don't ask me why...");
 
         atomic(T v = T{}) : v(v) {}
 
@@ -59,15 +59,15 @@ namespace my {
 
         void lock() {
             int cnt = 0;
-            while (++cnt <= 100) if (ato.load() == 0 && ato.compare_exchange(0, 1)) return;
+            while (++cnt <= 100) if (ato.load() == 1 && ato.compare_exchange(1, 0)) return;
             while (true) {
-                ato.wait_until(0);
-                if (ato.compare_exchange(0, 1)) break;
+                ato.wait_until(1);
+                if (ato.compare_exchange(1, 0)) break;
             }
         }
 
         void unlock() {
-            ato.store(0);
+            ato.store(1);
             ato.wake(1);
         }
     };
